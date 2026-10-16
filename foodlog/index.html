@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>FoodLog</title>
+  <meta name="theme-color" content="#0f766e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="FoodLog">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="assets/icon-180.png">
+  <link rel="icon" href="assets/icon-192.png">
+  <link data-trunk rel="css" href="style.css">
+  <link data-trunk rel="copy-dir" href="assets">
+  <link data-trunk rel="copy-file" href="manifest.webmanifest">
+  <link data-trunk rel="copy-file" href="sw.js">
+  <link data-trunk rel="rust" data-wasm-opt="z">
+  <script>
+    if ("serviceWorker" in navigator) {
+      addEventListener("load", () => navigator.serviceWorker.register("sw.js"));
+    }
+  </script>
+</head>
+<body></body>
+</html>
