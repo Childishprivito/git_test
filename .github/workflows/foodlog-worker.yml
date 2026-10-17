@@ -1,0 +1,93 @@
+name: FoodLog server
+
+# Deploys foodlog-worker/ to Cloudflare. Needs these repository secrets
+# (Settings › Secrets and variables › Actions):
+#   CLOUDFLARE_API_TOKEN   "Edit Cloudflare Workers" token
+#   CLOUDFLARE_ACCOUNT_ID  from the Cloudflare dashboard
+#   APP_PASSWORD           the password you'll type into the app
+#   ANTHROPIC_API_KEY      from console.anthropic.com
+#   USDA_API_KEY           optional, free from api.data.gov/signup
+
+on:
+  push:
+    branches: [master]
+    paths: ["foodlog-worker/**", "foodlog-core/**", ".github/workflows/foodlog-worker.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: foodlog-worker
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: foodlog-worker
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            foodlog-worker
+            foodlog-core
+      - name: Test shared code
+        run: cargo test --manifest-path ../foodlog-core/Cargo.toml
+
+      - name: Check Cloudflare secrets
+        id: check
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::warning::Cloudflare secrets aren't set yet, so the server wasn't deployed. See foodlog-worker/README.md."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.ready == 'true'
+        with:
+          node-version: 22
+      - name: Install Wrangler
+        if: steps.check.outputs.ready == 'true'
+        run: npm install --no-save --no-audit --no-fund wrangler@4.151.1
+
+      - name: Create the storage (first run only)
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          find_id() { npx wrangler kv namespace list | jq -r '[.[] | select(.title | endswith("foodlog-data"))][0].id // empty'; }
+          ID=$(find_id)
+          if [ -z "$ID" ]; then
+            npx wrangler kv namespace create foodlog-data
+            ID=$(find_id)
+          fi
+          test -n "$ID"
+          sed -i "s/KV_NAMESPACE_ID/$ID/" wrangler.toml
+
+      - name: Deploy
+        if: steps.check.outputs.ready == 'true'
+        run: npx wrangler deploy | tee deploy.log
+
+      - name: Set server secrets
+        if: steps.check.outputs.ready == 'true'
+        env:
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          USDA_API_KEY: ${{ secrets.USDA_API_KEY }}
+        run: |
+          jq -n 'env | {APP_PASSWORD, ANTHROPIC_API_KEY, USDA_API_KEY} | with_entries(select(.value != null and .value != ""))' > secrets.json
+          npx wrangler secret bulk secrets.json
+          rm secrets.json
+
+      - name: Show the server address
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          URL=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' deploy.log | head -1)
+          echo "### FoodLog server is live" >> "$GITHUB_STEP_SUMMARY"
+          echo "Put this in the app under Settings › Sync & AI: \`$URL\`" >> "$GITHUB_STEP_SUMMARY"

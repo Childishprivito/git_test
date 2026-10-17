@@ -1,0 +1,21 @@
+name = "foodlog"
+main = "build/worker/shim.mjs"
+compatibility_date = "2026-10-01"
+
+[build]
+command = "cargo install -q worker-build@0.8.7 && worker-build --release"
+
+[vars]
+# Only the app's own site may call this server from a browser.
+ALLOWED_ORIGINS = "https://childishprivito.github.io,http://127.0.0.1:8080,http://localhost:8080"
+MODEL = "claude-opus-5-5"
+
+# The deploy workflow fills in the id (it creates the namespace on first run).
+[[kv_namespaces]]
+binding = "FOODLOG"
+id = "KV_NAMESPACE_ID"
+
+# Secrets, set with `wrangler secret put NAME` (the deploy workflow does this):
+#   APP_PASSWORD       the password you type into the app's Settings
+#   ANTHROPIC_API_KEY  from console.anthropic.com
+#   USDA_API_KEY       optional, free from api.data.gov (falls back to DEMO_KEY)

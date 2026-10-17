@@ -173,3 +173,8 @@ label.inline select { width: auto; }
 }
 .toast.show { opacity: 1; }
 .credits { text-align: center; margin: 24px 0; }
+
+.ai { border-color: var(--accent); }
+.ai-note { background: var(--accent-soft); border-radius: 10px; padding: 10px 12px; margin: 8px 0; }
+input[type="file"] { padding: 10px; min-height: 52px; }
+.meal-head > div { display: flex; flex-wrap: wrap; justify-content: flex-end; }

@@ -133,6 +133,12 @@ pub struct Db {
     pub foods: Vec<Food>,
     #[serde(default)]
     pub goals: Goals,
+    /// When the goals were last changed (ms since 1970), so syncing keeps the newest.
+    #[serde(default)]
+    pub goals_updated: u64,
+    /// Ids of removed diary entries, so a removal on one device sticks on the others.
+    #[serde(default)]
+    pub deleted: Vec<u64>,
 }
 
 impl Db {
@@ -164,6 +170,58 @@ impl Db {
             scanned += 1;
             scanned <= 50
         });
+    }
+
+    pub fn remove_entry(&mut self, id: u64) {
+        self.entries.retain(|e| e.id != id);
+        if !self.deleted.contains(&id) {
+            self.deleted.push(id);
+        }
+    }
+
+    pub fn set_goals(&mut self, goals: Goals, now_ms: u64) {
+        self.goals = goals;
+        self.goals_updated = now_ms;
+    }
+
+    /// Combine two copies of the log (e.g. this phone and the server).
+    /// Nothing added on either side is lost, removals win, newest goals win.
+    pub fn merge(&self, other: &Db) -> Db {
+        let mut deleted = self.deleted.clone();
+        for id in &other.deleted {
+            if !deleted.contains(id) {
+                deleted.push(*id);
+            }
+        }
+        deleted.sort_unstable();
+
+        let mut entries: Vec<Entry> = Vec::new();
+        for e in self.entries.iter().chain(&other.entries) {
+            if deleted.binary_search(&e.id).is_err() && !entries.iter().any(|x| x.id == e.id) {
+                entries.push(e.clone());
+            }
+        }
+        entries.sort_by_key(|e| e.id);
+
+        let mut foods: Vec<Food> = Vec::new();
+        for f in self.foods.iter().chain(&other.foods) {
+            if !foods.iter().any(|x| x.id == f.id) {
+                foods.push(f.clone());
+            }
+        }
+
+        let (goals, goals_updated) = if other.goals_updated > self.goals_updated {
+            (other.goals.clone(), other.goals_updated)
+        } else {
+            (self.goals.clone(), self.goals_updated)
+        };
+        Db {
+            entries,
+            foods,
+            goals,
+            goals_updated,
+            deleted,
+        }
     }
 
     pub fn find_food(&self, id: &str) -> Option<Food> {
@@ -205,6 +263,69 @@ mod tests {
             });
         }
         assert_eq!(db.day_totals("2026-10-16").kcal, 400.0);
+    }
+
+    fn entry(id: u64) -> Entry {
+        Entry {
+            id,
+            date: "2026-10-16".into(),
+            meal: Meal::Lunch,
+            food: food("a"),
+            grams: 100.0,
+        }
+    }
+
+    #[test]
+    fn merge_keeps_entries_from_both_sides() {
+        let mut phone = Db::default();
+        phone.entries = vec![entry(1), entry(3)];
+        let mut server = Db::default();
+        server.entries = vec![entry(1), entry(2)];
+        let ids: Vec<u64> = phone.merge(&server).entries.iter().map(|e| e.id).collect();
+        assert_eq!(ids, [1, 2, 3]);
+    }
+
+    #[test]
+    fn merge_applies_removals_from_either_side() {
+        let mut phone = Db::default();
+        phone.entries = vec![entry(1), entry(2)];
+        let mut server = phone.clone();
+        server.remove_entry(2);
+        let merged = phone.merge(&server);
+        assert_eq!(merged.entries.len(), 1);
+        // And merging again in the other direction gives the same answer.
+        assert_eq!(server.merge(&phone).entries, merged.entries);
+    }
+
+    #[test]
+    fn merge_keeps_newest_goals() {
+        let mut phone = Db::default();
+        phone.set_goals(
+            Goals {
+                kcal: 1800.0,
+                ..Goals::default()
+            },
+            200,
+        );
+        let mut server = Db::default();
+        server.set_goals(
+            Goals {
+                kcal: 2500.0,
+                ..Goals::default()
+            },
+            100,
+        );
+        assert_eq!(phone.merge(&server).goals.kcal, 1800.0);
+        assert_eq!(server.merge(&phone).goals.kcal, 1800.0);
+    }
+
+    #[test]
+    fn old_backups_without_sync_fields_still_load() {
+        let db: Db = serde_json::from_str(
+            r#"{"entries":[],"foods":[],"goals":{"kcal":1,"protein":2,"carbs":3,"fat":4}}"#,
+        )
+        .unwrap();
+        assert!(db.deleted.is_empty());
     }
 
     #[test]

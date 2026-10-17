@@ -1,0 +1,97 @@
+//! Turning Open Food Facts product JSON into `Food`s.
+
+use crate::model::Food;
+use serde_json::Value;
+
+/// Numbers in Open Food Facts are sometimes strings, so accept both.
+pub(crate) fn num(v: &Value) -> Option<f64> {
+    match v {
+        Value::Number(n) => n.as_f64(),
+        Value::String(s) => s.trim().parse().ok(),
+        _ => None,
+    }
+}
+
+/// Turn one Open Food Facts product into a `Food` (per 100 g).
+/// Returns `None` if it has no name or no calorie info.
+pub fn parse_product(p: &Value, fallback_code: &str) -> Option<Food> {
+    let name = [&p["product_name_en"], &p["product_name"]]
+        .iter()
+        .filter_map(|v| v.as_str())
+        .map(str::trim)
+        .find(|s| !s.is_empty())?
+        .to_string();
+    let n = &p["nutriments"];
+    let serving_g = num(&p["serving_quantity"]).filter(|g| *g > 0.0);
+
+    // Prefer per-100 g values; fall back to per-serving values scaled up.
+    let get = |key: &str| -> Option<f64> {
+        num(&n[format!("{key}_100g")])
+            .or_else(|| Some(num(&n[format!("{key}_serving")])? * 100.0 / serving_g?))
+    };
+    let kcal = get("energy-kcal").or_else(|| get("energy").map(|kj| kj / 4.184))?;
+
+    let code = p["code"]
+        .as_str()
+        .filter(|c| !c.is_empty())
+        .unwrap_or(fallback_code);
+    Some(Food {
+        id: code.to_string(),
+        name,
+        brand: p["brands"]
+            .as_str()
+            .unwrap_or("")
+            .split(',')
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_string(),
+        kcal,
+        protein: get("proteins").unwrap_or(0.0),
+        carbs: get("carbohydrates").unwrap_or(0.0),
+        fat: get("fat").unwrap_or(0.0),
+        serving_g,
+        custom: false,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn parses_per_100g_product() {
+        let p = json!({
+            "code": "049000028911",
+            "product_name": "Diet Coke",
+            "brands": "Coca-Cola, The Coca-Cola Company",
+            "serving_quantity": "355",
+            "nutriments": { "energy-kcal_100g": 0.4, "proteins_100g": 0, "carbohydrates_100g": "0", "fat_100g": 0 }
+        });
+        let f = parse_product(&p, "").unwrap();
+        assert_eq!(f.name, "Diet Coke");
+        assert_eq!(f.brand, "Coca-Cola");
+        assert_eq!(f.serving_g, Some(355.0));
+        assert_eq!(f.kcal, 0.4);
+    }
+
+    #[test]
+    fn scales_per_serving_values_and_converts_kj() {
+        let p = json!({
+            "product_name": "Bar",
+            "serving_quantity": 50,
+            "nutriments": { "energy_serving": 1046, "proteins_serving": 10 }
+        });
+        let f = parse_product(&p, "123").unwrap();
+        assert_eq!(f.id, "123");
+        assert!((f.kcal - 500.0).abs() < 0.1); // 1046 kJ/50 g -> ~500 kcal/100 g
+        assert_eq!(f.protein, 20.0);
+    }
+
+    #[test]
+    fn rejects_products_without_calories() {
+        let p = json!({ "product_name": "Mystery", "nutriments": {} });
+        assert!(parse_product(&p, "").is_none());
+    }
+}

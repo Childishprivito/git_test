@@ -2,11 +2,14 @@
 
 use leptos::{prelude::*, task::spawn_local};
 
+use foodlog_core::estimate::{Estimate, EstimateRequest};
+use send_wrapper::SendWrapper;
+
 use crate::{
     model::{Db, Entry, Food, Macros, Meal},
-    off,
+    off, photo,
     scanner::Scanner,
-    store,
+    server, store,
 };
 
 #[derive(Clone, Copy, PartialEq)]
@@ -29,6 +32,10 @@ struct Ctx {
     picked: RwSignal<Option<Food>>,
     /// Short message read out by screen readers and shown on screen.
     toast: RwSignal<String>,
+    /// e.g. "Synced", "Offline — will sync later". Empty when no server is set up.
+    sync_status: RwSignal<String>,
+    /// Bump to sync right away (e.g. "Sync now" button, app reopened).
+    sync_nudge: RwSignal<u32>,
 }
 
 fn ctx() -> Ctx {
@@ -61,10 +68,11 @@ pub fn App() -> impl IntoView {
         meal: RwSignal::new(Meal::for_hour(store::current_hour())),
         picked: RwSignal::new(None),
         toast: RwSignal::new(String::new()),
+        sync_status: RwSignal::new(String::new()),
+        sync_nudge: RwSignal::new(0),
     };
     provide_context(c);
-    // Save whenever anything changes.
-    Effect::new(move |_| c.db.with(store::save));
+    start_sync(c);
 
     let tab_button = move |t: Tab, label: &'static str, icon: &'static str| {
         view! {
@@ -100,6 +108,82 @@ pub fn App() -> impl IntoView {
             {tab_button(Tab::Settings, "Settings", "⚙️")}
         </nav>
     }
+}
+
+/// Save every change on the phone, and (if a server is set up) send it there
+/// a moment later. The server merges in other devices' changes and sends the
+/// combined log back.
+fn start_sync(c: Ctx) {
+    // The log as last agreed with the server, to skip pointless uploads.
+    let last_synced = StoredValue::new(None::<Db>);
+    let generation = StoredValue::new(0u64);
+
+    let run = move || {
+        if server::config().is_none() {
+            c.sync_status.set(String::new());
+            return;
+        }
+        let sent = c.db.get_untracked();
+        c.sync_status.set("Syncing…".into());
+        spawn_local(async move {
+            match server::sync(&sent).await {
+                Ok(merged) => {
+                    last_synced.set_value(Some(merged.clone()));
+                    // Keep anything added on this phone while the request was out.
+                    let now = c.db.get_untracked();
+                    let next = if now == sent {
+                        merged
+                    } else {
+                        now.merge(&merged)
+                    };
+                    if next != now {
+                        c.db.set(next);
+                    }
+                    c.sync_status.set("Synced".into());
+                }
+                Err(e) => c.sync_status.set(format!("Not synced: {e}")),
+            }
+        });
+    };
+
+    Effect::new(move |_| {
+        c.sync_nudge.track();
+        c.db.with(store::save);
+        let unchanged =
+            c.db.with(|db| last_synced.with_value(|l| l.as_ref() == Some(db)));
+        if unchanged && c.sync_nudge.get_untracked() == 0 {
+            return;
+        }
+        // Wait for a pause in edits, then upload once.
+        generation.update_value(|g| *g += 1);
+        let mine = generation.get_value();
+        set_timeout(
+            move || {
+                if generation.get_value() == mine {
+                    run();
+                }
+            },
+            std::time::Duration::from_millis(1200),
+        );
+    });
+
+    // Pick up other devices' changes when the app comes back to the screen.
+    let on_visible = wasm_bindgen::closure::Closure::<dyn Fn()>::new(move || {
+        let visible = web_sys::window()
+            .and_then(|w| w.document())
+            .is_some_and(|d| d.visibility_state() == web_sys::VisibilityState::Visible);
+        if visible {
+            c.sync_nudge.update(|n| *n += 1);
+        }
+    });
+    if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+        use wasm_bindgen::JsCast;
+        let _ = doc.add_event_listener_with_callback(
+            "visibilitychange",
+            on_visible.as_ref().unchecked_ref(),
+        );
+    }
+    on_visible.forget(); // lives as long as the app
 }
 
 fn flash(msg: impl Into<String>) {
@@ -239,7 +323,7 @@ fn MealSection(meal: Meal, date: Memo<String>) -> impl IntoView {
                                     class="icon-btn danger"
                                     aria-label=format!("Remove {name}")
                                     on:click=move |_| {
-                                        c.db.update(|db| db.entries.retain(|x| x.id != id));
+                                        c.db.update(|db| db.remove_entry(id));
                                         flash("Removed");
                                     }
                                 >"✕"</button>
@@ -272,6 +356,10 @@ fn AddFood() -> impl IntoView {
     let results = RwSignal::new(Vec::<Food>::new());
     // Some(barcode or "") = show the custom food form.
     let custom_for = RwSignal::new(None::<String>);
+    // Show the "Estimate with AI" card (prefilled with this text).
+    let ai_for = RwSignal::new(None::<String>);
+    let ai_result = RwSignal::new(None::<Estimate>);
+    let has_server = server::config().is_some();
 
     let look_up = move |code: String| {
         let code: String = code.chars().filter(char::is_ascii_digit).collect();
@@ -292,8 +380,33 @@ fn AddFood() -> impl IntoView {
                     c.picked.set(Some(food));
                 }
                 Ok(None) => {
-                    status.set(format!("{code} isn't in Open Food Facts yet. Enter it from the label once and it'll be saved."));
-                    custom_for.set(Some(code));
+                    // Second chance: USDA's database of US branded foods.
+                    let usda = if has_server {
+                        server::usda(&code, true)
+                            .await
+                            .ok()
+                            .and_then(|v| v.into_iter().next())
+                    } else {
+                        None
+                    };
+                    match usda {
+                        Some(mut food) => {
+                            food.id = code;
+                            status.set(String::new());
+                            c.picked.set(Some(food));
+                        }
+                        None => {
+                            status.set(if has_server {
+                                format!("{code} isn't in the food databases yet. Snap the nutrition label and let AI read it, or type it in once.")
+                            } else {
+                                format!("{code} isn't in Open Food Facts yet. Enter it from the label once and it'll be saved.")
+                            });
+                            if has_server {
+                                ai_for.set(Some(String::new()));
+                            }
+                            custom_for.set(Some(code));
+                        }
+                    }
                 }
                 Err(e) => status.set(e),
             }
@@ -318,24 +431,38 @@ fn AddFood() -> impl IntoView {
         results.set(local);
         busy.set(true);
         status.set("Searching…".into());
+        ai_for.set(None);
         spawn_local(async move {
-            match off::search(&q).await {
-                Ok(found) => {
-                    let n = found.len();
-                    results.update(|r| {
-                        for f in found {
-                            if !r.iter().any(|x| x.id == f.id) {
-                                r.push(f);
-                            }
+            let add = |found: Vec<Food>| {
+                results.update(|r| {
+                    for f in found {
+                        if !r.iter().any(|x| x.id == f.id) {
+                            r.push(f);
                         }
-                    });
-                    status.set(if n == 0 && results.with_untracked(Vec::is_empty) {
-                        "No matches. Try fewer words, or add a custom food.".into()
-                    } else {
-                        String::new()
-                    });
+                    }
+                })
+            };
+            // USDA first (generic foods like "banana"), then Open Food Facts (brands).
+            let mut error = None;
+            if has_server {
+                match server::usda(&q, false).await {
+                    Ok(found) => add(found),
+                    Err(e) => error = Some(e),
                 }
-                Err(e) => status.set(e),
+            }
+            match off::search(&q).await {
+                Ok(found) => add(found),
+                Err(e) => error = error.or(Some(e)),
+            }
+            let empty = results.with_untracked(Vec::is_empty);
+            status.set(match (empty, error) {
+                (true, Some(e)) => e,
+                (true, None) if has_server => "No matches. Let AI estimate it below.".into(),
+                (true, None) => "No matches. Try fewer words, or add a custom food.".into(),
+                _ => String::new(),
+            });
+            if has_server {
+                ai_for.set(Some(q));
             }
             busy.set(false);
         });
@@ -386,8 +513,25 @@ fn AddFood() -> impl IntoView {
 
         <p class="status" role="status" aria-live="polite">{move || status.get()}</p>
 
+        {move || ai_for.get().map(|text| view! {
+            <AiEstimate
+                text=text
+                on_result=Callback::new(move |e: Estimate| {
+                    ai_result.set(Some(e));
+                    if custom_for.get_untracked().is_none() {
+                        custom_for.set(Some(String::new()));
+                    }
+                    ai_for.set(None);
+                })
+            />
+        })}
+
         {move || custom_for.get().map(|code| view! {
-            <CustomFoodForm barcode=code on_done=Callback::new(move |_| custom_for.set(None))/>
+            <CustomFoodForm
+                barcode=code
+                estimate=ai_result.get()
+                on_done=Callback::new(move |_| { custom_for.set(None); ai_result.set(None); })
+            />
         })}
 
         <Show when=move || !results.with(Vec::is_empty)>
@@ -400,7 +544,12 @@ fn AddFood() -> impl IntoView {
         <section class="card" aria-label="Saved foods">
             <div class="meal-head">
                 <h2>"Recent & custom"</h2>
-                <button class="btn ghost small" on:click=move |_| custom_for.set(Some(String::new()))>"+ Custom food"</button>
+                <div>
+                    {has_server.then(|| view! {
+                        <button class="btn ghost small" on:click=move |_| ai_for.set(Some(query.get_untracked()))>"✨ AI estimate"</button>
+                    })}
+                    <button class="btn ghost small" on:click=move |_| custom_for.set(Some(String::new()))>"+ Custom food"</button>
+                </div>
             </div>
             <Show
                 when=move || !c.db.with(|db| db.foods.is_empty())
@@ -455,15 +604,24 @@ fn FoodList(foods: Signal<Vec<Food>>) -> impl IntoView {
 }
 
 #[component]
-fn CustomFoodForm(barcode: String, on_done: Callback<()>) -> impl IntoView {
+fn CustomFoodForm(
+    barcode: String,
+    estimate: Option<Estimate>,
+    on_done: Callback<()>,
+) -> impl IntoView {
     let c = ctx();
-    let name = RwSignal::new(String::new());
+    // Prefill from the AI estimate, if there is one.
+    let pre = |f: &dyn Fn(&Estimate) -> String| {
+        RwSignal::new(estimate.as_ref().map(f).unwrap_or_default())
+    };
+    let num = |v: f64| format!("{}", (v * 10.0).round() / 10.0);
+    let name = pre(&|e| e.name.clone());
     let brand = RwSignal::new(String::new());
-    let serving = RwSignal::new(String::new());
-    let kcal = RwSignal::new(String::new());
-    let protein = RwSignal::new(String::new());
-    let carbs = RwSignal::new(String::new());
-    let fat = RwSignal::new(String::new());
+    let serving = pre(&|e| num(e.serving_g));
+    let kcal = pre(&|e| num(e.kcal));
+    let protein = pre(&|e| num(e.protein_g));
+    let carbs = pre(&|e| num(e.carbs_g));
+    let fat = pre(&|e| num(e.fat_g));
     let error = RwSignal::new(String::new());
     let has_barcode = !barcode.is_empty();
     let barcode = StoredValue::new(barcode);
@@ -519,9 +677,18 @@ fn CustomFoodForm(barcode: String, on_done: Callback<()>) -> impl IntoView {
 
     view! {
         <form class="card form" aria-label="Custom food" on:submit=move |ev| { ev.prevent_default(); save(); }>
-            <h2>"New custom food"</h2>
+            <h2>{if estimate.is_some() { "Check the AI estimate" } else { "New custom food" }}</h2>
             {has_barcode.then(|| view! { <p class="muted small">{format!("Barcode {}", barcode.get_value())}</p> })}
-            <p class="muted small">"Copy these from the nutrition label (per serving)."</p>
+            {match &estimate {
+                Some(e) => view! {
+                    <p class="ai-note">
+                        <strong>{format!("{} · {} confidence", e.serving_description, e.confidence)}</strong>
+                        <br/>{e.notes.clone()}<br/>
+                        <span class="muted small">"Fix anything that looks off, then save."</span>
+                    </p>
+                }.into_any(),
+                None => view! { <p class="muted small">"Copy these from the nutrition label (per serving)."</p> }.into_any(),
+            }}
             {field("cf-name", "Name", name, false)}
             {field("cf-brand", "Brand (optional)", brand, false)}
             {field("cf-serving", "Serving size (g)", serving, true)}
@@ -658,7 +825,10 @@ fn Settings() -> impl IntoView {
                     prop:value=move || format!("{:.0}", c.db.with(get))
                     on:change=move |ev| {
                         if let Some(v) = parse_num(&event_target_value(&ev)) {
-                            c.db.update(|db| set(db, v));
+                            c.db.update(|db| {
+                                set(db, v);
+                                db.goals_updated = store::now_ms();
+                            });
                         }
                     }/>
             }
@@ -674,10 +844,12 @@ fn Settings() -> impl IntoView {
             {goal("g-fat", "Fat (g)", |d| d.goals.fat, |d, v| d.goals.fat = v)}
         </section>
 
+        <ServerSettings/>
+
         <section class="card form" aria-label="Backup">
             <h2>"Backup"</h2>
             <p class="muted small">
-                "Your log lives only on this phone. Copy a backup now and then (e.g. into Notes), and paste it here to restore."
+                "Copy a backup now and then (e.g. into Notes), and paste it here to restore. Without a sync server, your log lives only on this phone."
             </p>
             <div class="input-row">
                 <button class="btn" type="button"
@@ -688,7 +860,7 @@ fn Settings() -> impl IntoView {
                     match serde_json::from_str::<Db>(&backup.get_untracked()) {
                         Ok(db) => {
                             let n = db.entries.len();
-                            c.db.set(db);
+                            c.db.update(|cur| *cur = cur.merge(&db));
                             restore_msg.set(format!("Restored {n} entries."));
                         }
                         Err(_) => restore_msg.set("That doesn't look like a FoodLog backup.".into()),
@@ -705,7 +877,107 @@ fn Settings() -> impl IntoView {
         <p class="muted small credits">
             "Food data from "
             <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener">"Open Food Facts"</a>
-            " (ODbL). Missing a product? You can add it there too."
+            " (ODbL) and "
+            <a href="https://fdc.nal.usda.gov" target="_blank" rel="noopener">"USDA FoodData Central"</a>
+            ". Missing a product? You can add it to Open Food Facts too."
         </p>
+    }
+}
+
+#[component]
+fn ServerSettings() -> impl IntoView {
+    let c = ctx();
+    let saved = server::config().unwrap_or_default();
+    let url = RwSignal::new(saved.url);
+    let password = RwSignal::new(saved.password);
+    let save = move || {
+        server::save_config(&server::Config {
+            url: url.get_untracked().trim().to_string(),
+            password: password.get_untracked(),
+        });
+        c.sync_nudge.update(|n| *n += 1);
+    };
+    view! {
+        <form class="card form" aria-label="Sync and AI server"
+            on:submit=move |ev| { ev.prevent_default(); save(); }>
+            <h2>"Sync & AI"</h2>
+            <p class="muted small">
+                "Your FoodLog server (see the README) syncs your log between devices and powers AI estimates."
+            </p>
+            <label for="srv-url">"Server address"</label>
+            <input id="srv-url" type="url" autocomplete="off" autocapitalize="off"
+                placeholder="https://foodlog.yourname.workers.dev"
+                prop:value=move || url.get()
+                on:input=move |ev| url.set(event_target_value(&ev))/>
+            <label for="srv-pass">"Password"</label>
+            <input id="srv-pass" type="password" autocomplete="current-password"
+                prop:value=move || password.get()
+                on:input=move |ev| password.set(event_target_value(&ev))/>
+            <div class="input-row">
+                <span class="status grow" role="status">{move || c.sync_status.get()}</span>
+                <button class="btn primary" type="submit">"Save & sync"</button>
+            </div>
+        </form>
+    }
+}
+
+/// Describe a food and/or add a photo; Claude estimates its nutrition.
+#[component]
+fn AiEstimate(text: String, on_result: Callback<Estimate>) -> impl IntoView {
+    let text = RwSignal::new(text);
+    let photo = RwSignal::new(None::<SendWrapper<web_sys::File>>);
+    let busy = RwSignal::new(false);
+    let error = RwSignal::new(String::new());
+    let file_ref = NodeRef::<leptos::html::Input>::new();
+
+    let go = move || {
+        let file = photo.get_untracked().map(SendWrapper::take);
+        let t = text.get_untracked();
+        if t.trim().is_empty() && file.is_none() {
+            error.set("Describe what you ate, or add a photo.".into());
+            return;
+        }
+        busy.set(true);
+        error.set(String::new());
+        spawn_local(async move {
+            let image = match file {
+                Some(f) => match photo::prepare(f).await {
+                    Ok(img) => Some(img),
+                    Err(e) => {
+                        error.set(e);
+                        busy.set(false);
+                        return;
+                    }
+                },
+                None => None,
+            };
+            match server::estimate(&EstimateRequest { text: t, image }).await {
+                Ok(est) => on_result.run(est),
+                Err(e) => error.set(e),
+            }
+            busy.set(false);
+        });
+    };
+
+    view! {
+        <form class="card form ai" aria-label="AI estimate" on:submit=move |ev| { ev.prevent_default(); go(); }>
+            <h2>"✨ Estimate with AI"</h2>
+            <label for="ai-text">"What did you eat?"</label>
+            <textarea id="ai-text" rows="2" placeholder="e.g. Chipotle chicken bowl with white rice, beans and guac"
+                prop:value=move || text.get()
+                on:input=move |ev| text.set(event_target_value(&ev))></textarea>
+            <label for="ai-photo">"Photo (optional): the nutrition label or your plate"</label>
+            <input id="ai-photo" type="file" accept="image/*" node_ref=file_ref
+                on:change=move |_| {
+                    let f = file_ref.get().and_then(|i| i.files()).and_then(|fs| fs.get(0));
+                    photo.set(f.map(SendWrapper::new));
+                }/>
+            <p class="error" role="alert">{move || error.get()}</p>
+            <div class="input-row">
+                <button class="btn primary" type="submit" disabled=move || busy.get()>
+                    {move || if busy.get() { "Estimating…" } else { "Estimate" }}
+                </button>
+            </div>
+        </form>
     }
 }

@@ -3,7 +3,7 @@ name: FoodLog
 on:
   push:
     branches: [master, "claude/**"]
-    paths: ["foodlog/**", ".github/workflows/foodlog.yml"]
+    paths: ["foodlog/**", "foodlog-core/**", ".github/workflows/foodlog.yml"]
   workflow_dispatch:
 
 permissions:
@@ -34,7 +34,7 @@ jobs:
           curl -sSL https://github.com/trunk-rs/trunk/releases/download/v0.21.14/trunk-x86_64-unknown-linux-gnu.tar.gz \
             | tar xz -C "$HOME/.cargo/bin"
       - name: Test
-        run: cargo test
+        run: cargo test && cargo test --manifest-path ../foodlog-core/Cargo.toml
       - name: Build
         run: trunk build --release --public-url "/${{ github.event.repository.name }}/"
       - uses: actions/upload-pages-artifact@v3

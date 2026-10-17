@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+foodlog-core = { path = "../foodlog-core" }
 leptos = { version = "0.8", features = ["csr"] }
 rxing = { version = "0.9.3", default-features = false, features = ["decoders", "oned", "no_character_set_support", "wasm_support"] }
 gloo-net = { version = "0.7", default-features = false, features = ["http", "json"] }
@@ -19,6 +20,7 @@ web-sys = { version = "0.3", features = [
   "MediaStreamConstraints", "HtmlVideoElement", "HtmlCanvasElement",
   "CanvasRenderingContext2d", "ImageData", "Storage", "Document", "Element", "HtmlElement",
   "HtmlAnchorElement", "Blob", "BlobPropertyBag", "Url",
+  "HtmlInputElement", "File", "FileList", "ImageBitmap", "VisibilityState",
 ] }
 
 [profile.release]

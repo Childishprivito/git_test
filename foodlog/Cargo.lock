@@ -390,6 +390,7 @@ name = "foodlog"
 version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
+ "foodlog-core",
  "gloo-net 0.7.0",
  "js-sys",
  "leptos",
@@ -400,6 +401,14 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "foodlog-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

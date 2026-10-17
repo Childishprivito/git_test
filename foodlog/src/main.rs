@@ -1,8 +1,11 @@
 mod app;
-mod model;
 mod off;
+mod photo;
 mod scanner;
+mod server;
 mod store;
+
+pub use foodlog_core::model;
 
 fn main() {
     console_error_panic_hook::set_once();

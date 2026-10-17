@@ -9,7 +9,10 @@ home screen like a normal app and works offline.
 - **Food data** from [Open Food Facts](https://world.openfoodfacts.org): free, no API key.
 - **Custom foods**: if a barcode isn't found, enter the label once and it's remembered.
 - **Diary** by meal with daily calorie/protein/carb/fat goals.
-- **Private**: everything is stored on your phone. Use Settings › Backup to copy it out.
+- **USDA search** for generic foods ("banana") and US brands, when the server is set up.
+- **AI estimates** when nothing is found: describe it or snap the label/plate, then check and save.
+- **Sync** between devices through your own server (`../foodlog-worker`), or keep everything
+  on the phone only. Settings › Backup copies it out either way.
 
 ## Install on iPhone
 
@@ -34,9 +37,11 @@ Pushing to `master` runs the tests, builds, and publishes to GitHub Pages
 
 | File | What it does |
 | --- | --- |
-| `src/model.rs` | Foods, diary entries, goals, totals |
+| `../foodlog-core` | Shared with the server: foods, diary, sync merge, Open Food Facts/USDA parsing, AI estimate format |
 | `src/store.rs` | Saving to the phone (localStorage), dates |
 | `src/off.rs` | Open Food Facts barcode lookup and search |
+| `src/server.rs` | Talking to your FoodLog server (sync, USDA, AI) |
+| `src/photo.rs` | Shrinking photos before they're sent for an AI estimate |
 | `src/scanner.rs` | Camera feed → greyscale → rxing barcode decode |
 | `src/app.rs` | The screens (Diary, Add food, Settings, amount sheet) |
 | `index.html`, `style.css`, `sw.js`, `manifest.webmanifest` | Web app shell, styles, offline cache, home-screen install |
