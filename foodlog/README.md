@@ -10,7 +10,9 @@ home screen like a normal app and works offline.
 - **Custom foods**: if a barcode isn't found, enter the label once and it's remembered.
 - **Diary** by meal with daily calorie/protein/carb/fat goals.
 - **USDA search** for generic foods ("banana") and US brands, when the server is set up.
-- **AI estimates** when nothing is found: describe it or snap the label/plate, then check and save.
+- **Photo search** when a barcode or search finds nothing: snap the front of the package, AI reads
+  what it is and looks it up in the databases. Pick the match (its barcode is remembered), or use
+  the AI's own estimate (also works for a photo of your plate).
 - **Sync** between devices through your own server (`../foodlog-worker`), or keep everything
   on the phone only. Settings › Backup copies it out either way.
 

@@ -178,3 +178,10 @@ label.inline select { width: auto; }
 .ai-note { background: var(--accent-soft); border-radius: 10px; padding: 10px 12px; margin: 8px 0; }
 input[type="file"] { padding: 10px; min-height: 52px; }
 .meal-head > div { display: flex; flex-wrap: wrap; justify-content: flex-end; }
+.file-btn { display: flex; align-items: center; justify-content: center; cursor: pointer; margin: 8px 0 0; }
+.file-btn.disabled { opacity: 0.6; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.file-btn:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }
+h3 { font-size: 1rem; margin: 12px 0 4px; }
+.ai > .btn { width: 100%; margin-top: 8px; white-space: normal; padding: 8px 12px; }
+.ai .status:empty, .ai .error:empty { display: none; }

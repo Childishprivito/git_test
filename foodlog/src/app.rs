@@ -3,7 +3,6 @@
 use leptos::{prelude::*, task::spawn_local};
 
 use foodlog_core::estimate::{Estimate, EstimateRequest};
-use send_wrapper::SendWrapper;
 
 use crate::{
     model::{Db, Entry, Food, Macros, Meal},
@@ -356,8 +355,8 @@ fn AddFood() -> impl IntoView {
     let results = RwSignal::new(Vec::<Food>::new());
     // Some(barcode or "") = show the custom food form.
     let custom_for = RwSignal::new(None::<String>);
-    // Show the "Estimate with AI" card (prefilled with this text).
-    let ai_for = RwSignal::new(None::<String>);
+    // Show the photo search card. Holds the barcode that wasn't found ("" if none).
+    let photo_for = RwSignal::new(None::<String>);
     let ai_result = RwSignal::new(None::<Estimate>);
     let has_server = server::config().is_some();
 
@@ -395,15 +394,12 @@ fn AddFood() -> impl IntoView {
                             status.set(String::new());
                             c.picked.set(Some(food));
                         }
+                        None if has_server => {
+                            status.set(format!("{code} isn't in the food databases. Snap the front of the package and AI will find it."));
+                            photo_for.set(Some(code));
+                        }
                         None => {
-                            status.set(if has_server {
-                                format!("{code} isn't in the food databases yet. Snap the nutrition label and let AI read it, or type it in once.")
-                            } else {
-                                format!("{code} isn't in Open Food Facts yet. Enter it from the label once and it'll be saved.")
-                            });
-                            if has_server {
-                                ai_for.set(Some(String::new()));
-                            }
+                            status.set(format!("{code} isn't in Open Food Facts yet. Enter it from the label once and it'll be saved."));
                             custom_for.set(Some(code));
                         }
                     }
@@ -431,7 +427,7 @@ fn AddFood() -> impl IntoView {
         results.set(local);
         busy.set(true);
         status.set("Searching…".into());
-        ai_for.set(None);
+        photo_for.set(None);
         spawn_local(async move {
             let add = |found: Vec<Food>| {
                 results.update(|r| {
@@ -457,12 +453,14 @@ fn AddFood() -> impl IntoView {
             let empty = results.with_untracked(Vec::is_empty);
             status.set(match (empty, error) {
                 (true, Some(e)) => e,
-                (true, None) if has_server => "No matches. Let AI estimate it below.".into(),
+                (true, None) if has_server => {
+                    "No matches. Snap the package (or your plate) and AI will find it.".into()
+                }
                 (true, None) => "No matches. Try fewer words, or add a custom food.".into(),
                 _ => String::new(),
             });
-            if has_server {
-                ai_for.set(Some(q));
+            if has_server && empty {
+                photo_for.set(Some(String::new()));
             }
             busy.set(false);
         });
@@ -513,15 +511,13 @@ fn AddFood() -> impl IntoView {
 
         <p class="status" role="status" aria-live="polite">{move || status.get()}</p>
 
-        {move || ai_for.get().map(|text| view! {
-            <AiEstimate
-                text=text
-                on_result=Callback::new(move |e: Estimate| {
+        {move || photo_for.get().map(|code| view! {
+            <PhotoSearch
+                barcode=code.clone()
+                on_use_estimate=Callback::new(move |e: Estimate| {
                     ai_result.set(Some(e));
-                    if custom_for.get_untracked().is_none() {
-                        custom_for.set(Some(String::new()));
-                    }
-                    ai_for.set(None);
+                    custom_for.set(Some(code.clone()));
+                    photo_for.set(None);
                 })
             />
         })}
@@ -546,7 +542,7 @@ fn AddFood() -> impl IntoView {
                 <h2>"Recent & custom"</h2>
                 <div>
                     {has_server.then(|| view! {
-                        <button class="btn ghost small" on:click=move |_| ai_for.set(Some(query.get_untracked()))>"✨ AI estimate"</button>
+                        <button class="btn ghost small" on:click=move |_| photo_for.set(Some(String::new()))>"📷 Photo"</button>
                     })}
                     <button class="btn ghost small" on:click=move |_| custom_for.set(Some(String::new()))>"+ Custom food"</button>
                 </div>
@@ -573,14 +569,22 @@ fn AddFood() -> impl IntoView {
 }
 
 #[component]
-fn FoodList(foods: Signal<Vec<Food>>) -> impl IntoView {
+fn FoodList(
+    foods: Signal<Vec<Food>>,
+    /// Save the picked food under this id (the barcode that found it).
+    #[prop(optional)]
+    save_as: Option<String>,
+) -> impl IntoView {
     let c = ctx();
     view! {
         <ul class="list">
             <For
                 each=move || foods.get()
                 key=|f: &Food| f.id.clone()
-                children=move |f: Food| {
+                children=move |mut f: Food| {
+                    if let Some(id) = save_as.clone().filter(|id| !id.is_empty()) {
+                        f.id = id;
+                    }
                     let title = f.title();
                     let detail = match f.serving_g {
                         Some(g) => format!("{:.0} kcal per serving ({g:.0} g)", f.kcal * g / 100.0),
@@ -921,63 +925,119 @@ fn ServerSettings() -> impl IntoView {
     }
 }
 
-/// Describe a food and/or add a photo; Claude estimates its nutrition.
+/// Snap the front of a package (or a plate). AI reads what it is, then we look
+/// that up in the food databases. If nothing matches, the AI's own numbers are offered.
 #[component]
-fn AiEstimate(text: String, on_result: Callback<Estimate>) -> impl IntoView {
-    let text = RwSignal::new(text);
-    let photo = RwSignal::new(None::<SendWrapper<web_sys::File>>);
+fn PhotoSearch(barcode: String, on_use_estimate: Callback<Estimate>) -> impl IntoView {
     let busy = RwSignal::new(false);
+    let step = RwSignal::new(String::new());
     let error = RwSignal::new(String::new());
+    let estimate = RwSignal::new(None::<Estimate>);
+    let matches = RwSignal::new(Vec::<Food>::new());
     let file_ref = NodeRef::<leptos::html::Input>::new();
-
-    let go = move || {
-        let file = photo.get_untracked().map(SendWrapper::take);
-        let t = text.get_untracked();
-        if t.trim().is_empty() && file.is_none() {
-            error.set("Describe what you ate, or add a photo.".into());
-            return;
+    let card_ref = NodeRef::<leptos::html::Section>::new();
+    // Bring the card into view when it opens and when results come in.
+    Effect::new(move |_| {
+        estimate.track();
+        if let Some(el) = card_ref.get() {
+            el.scroll_into_view();
         }
+    });
+    let has_barcode = !barcode.is_empty();
+    let context = StoredValue::new(if has_barcode {
+        format!("Barcode {barcode} isn't in the food databases. What product is this?")
+    } else {
+        String::new()
+    });
+
+    let run = move |file: web_sys::File| {
         busy.set(true);
         error.set(String::new());
+        estimate.set(None);
+        matches.set(Vec::new());
+        step.set("Reading the photo…".into());
         spawn_local(async move {
-            let image = match file {
-                Some(f) => match photo::prepare(f).await {
-                    Ok(img) => Some(img),
-                    Err(e) => {
-                        error.set(e);
-                        busy.set(false);
-                        return;
+            let result = async {
+                let image = photo::prepare(file).await?;
+                let est = server::estimate(&EstimateRequest {
+                    text: context.get_value(),
+                    image: Some(image),
+                })
+                .await?;
+                let q = est.search_query.trim().to_string();
+                if !q.is_empty() {
+                    step.set(format!("Looking up “{q}”…"));
+                    let (usda, off) = (server::usda(&q, false).await, off::search(&q).await);
+                    let mut found: Vec<Food> = usda.unwrap_or_default();
+                    for f in off.unwrap_or_default() {
+                        if !found.iter().any(|x| x.id == f.id) {
+                            found.push(f);
+                        }
                     }
-                },
-                None => None,
-            };
-            match server::estimate(&EstimateRequest { text: t, image }).await {
-                Ok(est) => on_result.run(est),
+                    // The brand the AI read goes first.
+                    let brand = est.brand.to_lowercase();
+                    found.sort_by_key(|f| {
+                        brand.is_empty() || !f.title().to_lowercase().contains(&brand)
+                    });
+                    found.truncate(6);
+                    matches.set(found);
+                }
+                Ok::<_, String>(est)
+            }
+            .await;
+            match result {
+                Ok(est) => estimate.set(Some(est)),
                 Err(e) => error.set(e),
             }
+            step.set(String::new());
             busy.set(false);
         });
     };
 
     view! {
-        <form class="card form ai" aria-label="AI estimate" on:submit=move |ev| { ev.prevent_default(); go(); }>
-            <h2>"✨ Estimate with AI"</h2>
-            <label for="ai-text">"What did you eat?"</label>
-            <textarea id="ai-text" rows="2" placeholder="e.g. Chipotle chicken bowl with white rice, beans and guac"
-                prop:value=move || text.get()
-                on:input=move |ev| text.set(event_target_value(&ev))></textarea>
-            <label for="ai-photo">"Photo (optional): the nutrition label or your plate"</label>
-            <input id="ai-photo" type="file" accept="image/*" node_ref=file_ref
-                on:change=move |_| {
-                    let f = file_ref.get().and_then(|i| i.files()).and_then(|fs| fs.get(0));
-                    photo.set(f.map(SendWrapper::new));
-                }/>
+        <section class="card form ai" aria-label="Find it from a photo" node_ref=card_ref>
+            <h2>"📷 Find it from a photo"</h2>
+            <p class="muted small">
+                {if has_barcode {
+                    "Take a photo of the front of the package. AI reads what it is and finds it, and the barcode is remembered for next time."
+                } else {
+                    "Take a photo of the front of the package, or of your plate."
+                }}
+            </p>
+            // Styled as a big button; on iPhone it opens the camera straight away.
+            <label class="btn primary big-btn file-btn" class:disabled=move || busy.get()>
+                {move || if busy.get() { "Working…" } else if estimate.with(Option::is_some) { "Retake photo" } else { "Take photo" }}
+                <input type="file" accept="image/*" capture="environment" class="visually-hidden"
+                    node_ref=file_ref disabled=move || busy.get()
+                    on:change=move |_| {
+                        if let Some(f) = file_ref.get().and_then(|i| i.files()).and_then(|fs| fs.get(0)) {
+                            run(f);
+                        }
+                    }/>
+            </label>
+            <p class="status" role="status" aria-live="polite">{move || step.get()}</p>
             <p class="error" role="alert">{move || error.get()}</p>
-            <div class="input-row">
-                <button class="btn primary" type="submit" disabled=move || busy.get()>
-                    {move || if busy.get() { "Estimating…" } else { "Estimate" }}
-                </button>
-            </div>
-        </form>
+
+            {move || estimate.get().map(|est| {
+                let title = if est.brand.is_empty() { est.name.clone() } else { format!("{} · {}", est.name, est.brand) };
+                let found = !matches.with(Vec::is_empty);
+                let use_est = est.clone();
+                view! {
+                    <p class="ai-note"><strong>{format!("Looks like: {title}")}</strong><br/>{est.notes.clone()}</p>
+                    {found.then(|| view! {
+                        <h3>"Is it one of these?"</h3>
+                        <FoodList foods=Signal::derive(move || matches.get()) save_as=barcode.clone()/>
+                    })}
+                    <button class="btn" type="button" on:click=move |_| on_use_estimate.run(use_est.clone())>
+                        {format!(
+                            "{}Use AI's numbers ({:.0} kcal per {})",
+                            if found { "None of these. " } else { "" },
+                            est.kcal,
+                            est.serving_description
+                        )}
+                    </button>
+                }
+            })}
+        </section>
     }
 }

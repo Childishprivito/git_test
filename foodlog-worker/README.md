@@ -6,7 +6,7 @@ It keeps your API keys secret and stores your log so it syncs between devices.
 | Endpoint | What it does |
 | --- | --- |
 | `POST /sync` | Merges the app's log with the saved one and returns the result |
-| `POST /estimate` | Asks Claude for nutrition facts from a description and/or photo |
+| `POST /estimate` | Sends a photo (front of a package, a label or a plate) to Claude, which says what the food is, a database search for it, and estimated nutrition |
 | `GET /usda?q=…` | Searches USDA FoodData Central (`&upc=…` matches a barcode) |
 
 Every request needs `Authorization: Bearer <APP_PASSWORD>`, and browsers may only

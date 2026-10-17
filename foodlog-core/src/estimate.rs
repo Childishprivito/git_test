@@ -25,7 +25,14 @@ pub struct EstimateRequest {
 /// Claude -> server -> app. Numbers are for one serving as described.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Estimate {
+    /// Product name as printed, without the brand.
     pub name: String,
+    /// Brand as printed on the package, or "".
+    #[serde(default)]
+    pub brand: String,
+    /// What to type into a food database to find this product, or "" if it isn't packaged.
+    #[serde(default)]
+    pub search_query: String,
     pub serving_description: String,
     pub serving_g: f64,
     pub kcal: f64,
@@ -48,7 +55,7 @@ impl Estimate {
         Food {
             id,
             name: self.name.clone(),
-            brand: String::new(),
+            brand: self.brand.clone(),
             kcal: per100(self.kcal),
             protein: per100(self.protein_g),
             carbs: per100(self.carbs_g),
@@ -59,16 +66,17 @@ impl Estimate {
     }
 }
 
-pub const SYSTEM_PROMPT: &str = "You estimate nutrition facts for a personal calorie-tracking app. \
-The user describes something they ate and may attach a photo.\n\
-- If the photo shows a nutrition facts label, copy its per-serving values exactly and set confidence to \"high\".\n\
-- If the photo shows a meal or the user only describes it, estimate a realistic portion and its nutrition \
-using typical recipes and restaurant data; set confidence to \"medium\" or \"low\".\n\
-- If the user names a quantity (\"2 slices\", \"large\"), the serving is that whole quantity.\n\
-- serving_g is the total weight of the serving in grams (use ml as grams for drinks).\n\
-- name is short and specific, like \"Chipotle chicken burrito bowl\".\n\
-- serving_description says what the serving is, like \"1 bowl (about 650 g)\".\n\
-- notes is one short sentence on what you assumed. If the input isn't food, give zeros and say so in notes.";
+pub const SYSTEM_PROMPT: &str = "You identify foods from photos for a personal calorie-tracking app. \
+The photo is usually the front of a packaged food. It may instead show a nutrition facts label or a plate of food.\n\
+- name: the product name as printed, without the brand (e.g. \"Vanilla Skyr\"). For unpackaged food, a short specific name.\n\
+- brand: the brand exactly as printed, or \"\" if none is visible.\n\
+- search_query: brand plus product name as you'd type it into a food database search \
+(e.g. \"Siggi's vanilla skyr\"), or \"\" if it isn't a packaged product.\n\
+- Nutrition is for one serving. If a nutrition label is visible, copy it exactly and set confidence to \"high\". \
+Otherwise use what you know about this product's label (\"medium\"), or estimate a realistic portion (\"low\").\n\
+- serving_g is the serving's weight in grams (use ml as grams for drinks).\n\
+- serving_description says what the serving is, like \"1 cup (150 g)\".\n\
+- notes is one short sentence on what you read or assumed. If the photo isn't food, give zeros and say so in notes.";
 
 /// JSON schema for structured output (every object closed, every field required).
 pub fn schema() -> Value {
@@ -76,6 +84,8 @@ pub fn schema() -> Value {
         "type": "object",
         "properties": {
             "name": {"type": "string"},
+            "brand": {"type": "string"},
+            "search_query": {"type": "string"},
             "serving_description": {"type": "string"},
             "serving_g": {"type": "number"},
             "kcal": {"type": "number"},
@@ -85,7 +95,7 @@ pub fn schema() -> Value {
             "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
             "notes": {"type": "string"}
         },
-        "required": ["name", "serving_description", "serving_g", "kcal", "protein_g", "carbs_g", "fat_g", "confidence", "notes"],
+        "required": ["name", "brand", "search_query", "serving_description", "serving_g", "kcal", "protein_g", "carbs_g", "fat_g", "confidence", "notes"],
         "additionalProperties": false
     })
 }
@@ -100,7 +110,7 @@ pub fn claude_request(model: &str, req: &EstimateRequest) -> Value {
         }));
     }
     let text = if req.text.trim().is_empty() {
-        "Estimate the nutrition for what's in this photo."
+        "What food is this? Identify it and estimate its nutrition."
     } else {
         req.text.trim()
     };
@@ -164,7 +174,7 @@ mod tests {
             "stop_reason": "end_turn",
             "content": [
                 {"type": "thinking", "thinking": ""},
-                {"type": "text", "text": "{\"name\":\"Pepperoni pizza\",\"serving_description\":\"2 slices\",\"serving_g\":220,\"kcal\":620,\"protein_g\":26,\"carbs_g\":70,\"fat_g\":26,\"confidence\":\"medium\",\"notes\":\"Assumed large slices.\"}"}
+                {"type": "text", "text": "{\"name\":\"Pepperoni pizza\",\"brand\":\"\",\"search_query\":\"\",\"serving_description\":\"2 slices\",\"serving_g\":220,\"kcal\":620,\"protein_g\":26,\"carbs_g\":70,\"fat_g\":26,\"confidence\":\"medium\",\"notes\":\"Assumed large slices.\"}"}
             ]
         });
         let e = parse_claude_response(&resp).unwrap();
@@ -172,6 +182,13 @@ mod tests {
         let f = e.to_food("custom-1".into());
         assert!((f.kcal - 281.8).abs() < 0.1);
         assert_eq!(f.serving_g, Some(220.0));
+    }
+
+    #[test]
+    fn schema_asks_for_brand_and_search_query() {
+        let req = schema()["required"].clone();
+        assert!(req.as_array().unwrap().iter().any(|v| v == "search_query"));
+        assert!(req.as_array().unwrap().iter().any(|v| v == "brand"));
     }
 
     #[test]
