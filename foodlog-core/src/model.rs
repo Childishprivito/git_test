@@ -257,7 +257,17 @@ impl Db {
             (self.program.clone(), self.program_updated)
         };
 
-        Db { entries, foods, goals, goals_updated, deleted, program, program_updated, sets, deleted_sets }
+        Db {
+            entries,
+            foods,
+            goals,
+            goals_updated,
+            deleted,
+            program,
+            program_updated,
+            sets,
+            deleted_sets,
+        }
     }
 
     pub fn find_food(&self, id: &str) -> Option<Food> {
@@ -358,12 +368,32 @@ mod tests {
     #[test]
     fn merge_combines_workout_sets_and_keeps_newest_program() {
         use crate::workout::{LoggedSet, Program};
-        let set = |id| LoggedSet { id, date: "2026-10-17".into(), exercise: "Row".into(), weight: 100.0, reps: 10, week: None, day: String::new() };
-        let mut phone = Db { sets: vec![set(1), set(2)], ..Db::default() };
-        phone.program = Some(Program { name: "New".into(), weeks: vec![] });
+        let set = |id| LoggedSet {
+            id,
+            date: "2026-10-17".into(),
+            exercise: "Row".into(),
+            weight: 100.0,
+            reps: 10,
+            week: None,
+            day: String::new(),
+        };
+        let mut phone = Db {
+            sets: vec![set(1), set(2)],
+            ..Db::default()
+        };
+        phone.program = Some(Program {
+            name: "New".into(),
+            weeks: vec![],
+        });
         phone.program_updated = 20;
-        let mut server = Db { sets: vec![set(1), set(3)], ..Db::default() };
-        server.program = Some(Program { name: "Old".into(), weeks: vec![] });
+        let mut server = Db {
+            sets: vec![set(1), set(3)],
+            ..Db::default()
+        };
+        server.program = Some(Program {
+            name: "Old".into(),
+            weeks: vec![],
+        });
         server.program_updated = 10;
         server.remove_set(2);
         let m = phone.merge(&server);

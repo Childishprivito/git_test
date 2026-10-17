@@ -33,7 +33,9 @@ pub fn read(bytes: &[u8]) -> Result<Grid, String> {
         return Ok(read_ods(&content));
     }
     if let Some(sheet) = file("xl/worksheets/sheet1.xml") {
-        let shared = file("xl/sharedStrings.xml").map(|s| shared_strings(&s)).unwrap_or_default();
+        let shared = file("xl/sharedStrings.xml")
+            .map(|s| shared_strings(&s))
+            .unwrap_or_default();
         return Ok(read_xlsx(&sheet, &shared));
     }
     Err("Couldn't find a sheet in that file.".into())
@@ -48,7 +50,10 @@ fn attr(e: &BytesStart, name: &str) -> Option<String> {
 }
 
 fn repeat(e: &BytesStart, name: &str) -> usize {
-    attr(e, name).and_then(|v| v.parse().ok()).unwrap_or(1).max(1)
+    attr(e, name)
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(1)
+        .max(1)
 }
 
 /// OpenDocument (.ods, LibreOffice / Numbers export).
@@ -63,7 +68,11 @@ pub fn read_ods(xml: &str) -> Grid {
     let mut paragraphs = 0;
 
     let push_cell = |row: &mut Vec<Cell>, c: Cell, n: usize| {
-        let n = if c.text.is_empty() && n > MAX_REPEAT { 1 } else { n };
+        let n = if c.text.is_empty() && n > MAX_REPEAT {
+            1
+        } else {
+            n
+        };
         for _ in 0..n {
             row.push(c.clone());
         }
@@ -75,7 +84,9 @@ pub fn read_ods(xml: &str) -> Grid {
             Ok(ev) => ev,
         };
         match ev {
-            Event::Start(e) | Event::Empty(e) if !in_first_table && e.name().as_ref() == "table:table" => {
+            Event::Start(e) | Event::Empty(e)
+                if !in_first_table && e.name().as_ref() == "table:table" =>
+            {
                 tables += 1;
                 in_first_table = tables == 1;
             }
@@ -90,22 +101,48 @@ pub fn read_ods(xml: &str) -> Grid {
                 grid.extend((0..n).map(|_| Vec::new()));
             }
             Event::End(e) if e.name().as_ref() == "table:table-row" => {
-                while row.last().is_some_and(|c| c.text.is_empty() && c.link.is_none()) {
+                while row
+                    .last()
+                    .is_some_and(|c| c.text.is_empty() && c.link.is_none())
+                {
                     row.pop();
                 }
-                let n = if row.is_empty() { row_repeat.min(MAX_REPEAT) } else { row_repeat };
+                let n = if row.is_empty() {
+                    row_repeat.min(MAX_REPEAT)
+                } else {
+                    row_repeat
+                };
                 for _ in 0..n {
                     grid.push(row.clone());
                 }
             }
-            Event::Start(e) if matches!(e.name().as_ref(), "table:table-cell" | "table:covered-table-cell") => {
+            Event::Start(e)
+                if matches!(
+                    e.name().as_ref(),
+                    "table:table-cell" | "table:covered-table-cell"
+                ) =>
+            {
                 cell = Some((Cell::default(), repeat(&e, "table:number-columns-repeated")));
                 paragraphs = 0;
             }
-            Event::Empty(e) if matches!(e.name().as_ref(), "table:table-cell" | "table:covered-table-cell") => {
-                push_cell(&mut row, Cell::default(), repeat(&e, "table:number-columns-repeated"));
+            Event::Empty(e)
+                if matches!(
+                    e.name().as_ref(),
+                    "table:table-cell" | "table:covered-table-cell"
+                ) =>
+            {
+                push_cell(
+                    &mut row,
+                    Cell::default(),
+                    repeat(&e, "table:number-columns-repeated"),
+                );
             }
-            Event::End(e) if matches!(e.name().as_ref(), "table:table-cell" | "table:covered-table-cell") => {
+            Event::End(e)
+                if matches!(
+                    e.name().as_ref(),
+                    "table:table-cell" | "table:covered-table-cell"
+                ) =>
+            {
                 if let Some((mut c, n)) = cell.take() {
                     c.text = c.text.trim().to_string();
                     push_cell(&mut row, c, n);
@@ -141,6 +178,10 @@ pub fn read_ods(xml: &str) -> Grid {
             }
             Event::GeneralRef(e) => {
                 if let Some((c, _)) = cell.as_mut() {
+                    if let Ok(Some(ch)) = e.resolve_char_ref() {
+                        c.text.push(ch);
+                        continue;
+                    }
                     c.text.push_str(match &*e {
                         "amp" => "&",
                         "lt" => "<",
@@ -167,7 +208,9 @@ fn shared_strings(xml: &str) -> Vec<String> {
         match r.read_event() {
             Ok(Event::Eof) | Err(_) => break,
             Ok(Event::Start(e)) if e.name().as_ref() == "si" => cur = Some(String::new()),
-            Ok(Event::End(e)) if e.name().as_ref() == "si" => out.push(cur.take().unwrap_or_default()),
+            Ok(Event::End(e)) if e.name().as_ref() == "si" => {
+                out.push(cur.take().unwrap_or_default())
+            }
             Ok(Event::Start(e)) if e.name().as_ref() == "t" => in_t = true,
             Ok(Event::End(e)) if e.name().as_ref() == "t" => in_t = false,
             // Phonetic hints (<rPh>) also use <t>; they're rare and harmless here.
@@ -178,6 +221,10 @@ fn shared_strings(xml: &str) -> Vec<String> {
             }
             Ok(Event::GeneralRef(e)) if in_t => {
                 if let Some(s) = cur.as_mut() {
+                    if let Ok(Some(ch)) = e.resolve_char_ref() {
+                        s.push(ch);
+                        continue;
+                    }
                     s.push_str(match &*e {
                         "amp" => "&",
                         "lt" => "<",
@@ -198,7 +245,9 @@ fn shared_strings(xml: &str) -> Vec<String> {
 fn cell_ref(r: &str) -> Option<(usize, usize)> {
     let letters: String = r.chars().take_while(|c| c.is_ascii_alphabetic()).collect();
     let row: usize = r[letters.len()..].parse().ok()?;
-    let col = letters.bytes().fold(0usize, |acc, b| acc * 26 + (b.to_ascii_uppercase() - b'A' + 1) as usize);
+    let col = letters.bytes().fold(0usize, |acc, b| {
+        acc * 26 + (b.to_ascii_uppercase() - b'A' + 1) as usize
+    });
     Some((row.checked_sub(1)?, col.checked_sub(1)?))
 }
 
@@ -223,6 +272,11 @@ pub fn read_xlsx(xml: &str, shared: &[String]) -> Grid {
             Ok(Event::Text(t)) if in_value => {
                 value.push_str(&t);
             }
+            Ok(Event::GeneralRef(e)) if in_value && matches!(e.resolve_char_ref(), Ok(Some(_))) => {
+                if let Ok(Some(ch)) = e.resolve_char_ref() {
+                    value.push(ch);
+                }
+            }
             Ok(Event::GeneralRef(e)) if in_value => value.push_str(match &*e {
                 "amp" => "&",
                 "lt" => "<",
@@ -234,7 +288,13 @@ pub fn read_xlsx(xml: &str, shared: &[String]) -> Grid {
             Ok(Event::End(e)) if e.name().as_ref() == "c" => {
                 if let Some((row, col)) = pos.take() {
                     let text = match kind.as_str() {
-                        "s" => value.trim().parse::<usize>().ok().and_then(|i| shared.get(i)).cloned().unwrap_or_default(),
+                        "s" => value
+                            .trim()
+                            .parse::<usize>()
+                            .ok()
+                            .and_then(|i| shared.get(i))
+                            .cloned()
+                            .unwrap_or_default(),
                         _ => value.clone(),
                     };
                     if row >= grid.len() {
@@ -244,7 +304,10 @@ pub fn read_xlsx(xml: &str, shared: &[String]) -> Grid {
                     if col >= line.len() {
                         line.resize(col + 1, Cell::default());
                     }
-                    line[col] = Cell { text: text.trim().to_string(), link: None };
+                    line[col] = Cell {
+                        text: text.trim().to_string(),
+                        link: None,
+                    };
                 }
             }
             _ => {}
@@ -279,7 +342,10 @@ mod tests {
 
     #[test]
     fn xlsx_shared_and_inline_values() {
-        let shared = shared_strings(r#"<sst><si><t>Week 1</t></si><si><r><t>Hack </t></r><r><t>Squat</t></r></si></sst>"#);
+        let shared = shared_strings(
+            r#"<sst><si><t>Week 1</t></si><si><r><t>Hack </t></r><r><t>Squat</t></r></si><si><t>Pull #1&#10;(Lat)</t></si></sst>"#,
+        );
+        assert_eq!(shared[2], "Pull #1\n(Lat)");
         let g = read_xlsx(
             r#"<worksheet><sheetData><row r="2"><c r="A2" t="s"><v>0</v></c><c r="C2" t="s"><v>1</v></c><c r="D2"><v>3</v></c></row></sheetData></worksheet>"#,
             &shared,

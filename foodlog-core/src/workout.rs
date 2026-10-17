@@ -80,7 +80,12 @@ impl LoggedSet {
 
 /// Exercises match ignoring case and extra spaces.
 pub fn same_exercise(a: &str, b: &str) -> bool {
-    let norm = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
+    let norm = |s: &str| {
+        s.split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .to_lowercase()
+    };
     norm(a) == norm(b)
 }
 
@@ -98,7 +103,10 @@ pub struct Record {
 pub fn records(sets: &[LoggedSet]) -> Vec<Record> {
     let mut out: Vec<Record> = Vec::new();
     for s in sets.iter().filter(|s| s.reps > 0) {
-        match out.iter_mut().find(|r| same_exercise(&r.exercise, &s.exercise)) {
+        match out
+            .iter_mut()
+            .find(|r| same_exercise(&r.exercise, &s.exercise))
+        {
             Some(r) => {
                 r.total_sets += 1;
                 if (s.weight, s.reps) > (r.heaviest.weight, r.heaviest.reps) {
@@ -134,15 +142,20 @@ impl PrFlags {
 }
 
 pub fn pr_flags(new: &LoggedSet, history: &[LoggedSet]) -> PrFlags {
-    let past: Vec<&LoggedSet> =
-        history.iter().filter(|s| s.id != new.id && s.reps > 0 && same_exercise(&s.exercise, &new.exercise)).collect();
+    let past: Vec<&LoggedSet> = history
+        .iter()
+        .filter(|s| s.id != new.id && s.reps > 0 && same_exercise(&s.exercise, &new.exercise))
+        .collect();
     if past.is_empty() || new.reps == 0 {
         // The first time isn't a "record", just a starting point.
         return PrFlags::default();
     }
     let max_w = past.iter().map(|s| s.weight).fold(f64::MIN, f64::max);
     let max_e = past.iter().map(|s| s.e1rm()).fold(f64::MIN, f64::max);
-    PrFlags { weight: new.weight > max_w, e1rm: new.e1rm() > max_e + 1e-9 }
+    PrFlags {
+        weight: new.weight > max_w,
+        e1rm: new.e1rm() > max_e + 1e-9,
+    }
 }
 
 /// The most recent session's sets for an exercise (newest date, then newest id).
@@ -152,9 +165,15 @@ pub fn last_session(exercise: &str, sets: &[LoggedSet], before_id: Option<u64>) 
         .filter(|s| same_exercise(&s.exercise, exercise) && before_id.is_none_or(|b| s.id < b))
         .collect();
     matching.sort_by(|a, b| (&a.date, a.week, a.id).cmp(&(&b.date, b.week, b.id)));
-    let Some(last) = matching.last() else { return Vec::new() };
+    let Some(last) = matching.last() else {
+        return Vec::new();
+    };
     let key = (last.date.clone(), last.week, last.day.clone());
-    matching.into_iter().filter(|s| (s.date.clone(), s.week, s.day.clone()) == key).cloned().collect()
+    matching
+        .into_iter()
+        .filter(|s| (s.date.clone(), s.week, s.day.clone()) == key)
+        .cloned()
+        .collect()
 }
 
 /// "135 - 8", "155 -6", "60 12", "37.5x15" -> (weight, reps).
@@ -182,9 +201,17 @@ pub struct Imported {
 #[cfg(feature = "import")]
 pub fn import(grid: &crate::sheet::Grid, name: &str, first_id: u64) -> Result<Imported, String> {
     let text = |r: &[crate::sheet::Cell], c: Option<usize>| -> String {
-        c.and_then(|c| r.get(c)).map(|x| x.text.trim().to_string()).unwrap_or_default()
+        c.and_then(|c| r.get(c))
+            .map(|x| x.text.trim().to_string())
+            .unwrap_or_default()
     };
-    let mut out = Imported { program: Program { name: name.to_string(), weeks: Vec::new() }, sets: Vec::new() };
+    let mut out = Imported {
+        program: Program {
+            name: name.to_string(),
+            weeks: Vec::new(),
+        },
+        sets: Vec::new(),
+    };
     let mut block = String::new();
     let mut next_id = first_id;
     let mut i = 0;
@@ -194,8 +221,12 @@ pub fn import(grid: &crate::sheet::Grid, name: &str, first_id: u64) -> Result<Im
         if a.to_uppercase().starts_with("BLOCK") {
             block = tidy_block(&a);
         }
-        let week_no = a.strip_prefix("Week").and_then(|n| n.trim().parse::<u32>().ok());
-        let ex_col = row.iter().position(|c| c.text.trim().eq_ignore_ascii_case("Exercise"));
+        let week_no = a
+            .strip_prefix("Week")
+            .and_then(|n| n.trim().parse::<u32>().ok());
+        let ex_col = row
+            .iter()
+            .position(|c| c.text.trim().eq_ignore_ascii_case("Exercise"));
         let (Some(week_no), Some(ex_col)) = (week_no, ex_col) else {
             i += 1;
             continue;
@@ -210,7 +241,9 @@ pub fn import(grid: &crate::sheet::Grid, name: &str, first_id: u64) -> Result<Im
         let col_tech = find(&["technique"]);
         let col_warm = find(&["warm"]);
         let col_work = find(&["working"]);
-        let col_reps = row.iter().position(|c| c.text.trim().eq_ignore_ascii_case("reps"));
+        let col_reps = row
+            .iter()
+            .position(|c| c.text.trim().eq_ignore_ascii_case("reps"));
         let col_early = find(&["early", "rpe"]);
         let col_last = find(&["last set", "rpe"]);
         let col_rest = find(&["rest"]);
@@ -234,7 +267,11 @@ pub fn import(grid: &crate::sheet::Grid, name: &str, first_id: u64) -> Result<Im
         let wi = match out.program.weeks.iter().position(|w| w.number == week_no) {
             Some(wi) => wi,
             None => {
-                out.program.weeks.push(Week { number: week_no, block: block.clone(), days: Vec::new() });
+                out.program.weeks.push(Week {
+                    number: week_no,
+                    block: block.clone(),
+                    days: Vec::new(),
+                });
                 out.program.weeks.len() - 1
             }
         };
@@ -252,9 +289,14 @@ pub fn import(grid: &crate::sheet::Grid, name: &str, first_id: u64) -> Result<Im
             let ex_name = text(row, Some(ex_col));
             if !a.is_empty() {
                 let day = a.split_whitespace().collect::<Vec<_>>().join(" ");
-                out.program.weeks[wi].days.push(Day { name: day, exercises: Vec::new() });
+                out.program.weeks[wi].days.push(Day {
+                    name: day,
+                    exercises: Vec::new(),
+                });
             }
-            let Some(day) = out.program.weeks[wi].days.last_mut() else { continue };
+            let Some(day) = out.program.weeks[wi].days.last_mut() else {
+                continue;
+            };
             if ex_name.is_empty() {
                 continue;
             }
@@ -266,8 +308,12 @@ pub fn import(grid: &crate::sheet::Grid, name: &str, first_id: u64) -> Result<Im
             let ex = Exercise {
                 name: ex_name.clone(),
                 video: row.get(ex_col).and_then(|c| c.link.clone()),
-                technique: if technique.eq_ignore_ascii_case("n/a") { String::new() } else { technique },
-                warmup_sets: text(row, col_warm),
+                technique: if technique.eq_ignore_ascii_case("n/a") {
+                    String::new()
+                } else {
+                    technique
+                },
+                warmup_sets: warmup_text(&text(row, col_warm)),
                 working_sets: text(row, col_work).parse().unwrap_or(0),
                 reps: text(row, col_reps),
                 early_rpe: text(row, col_early),
@@ -295,9 +341,35 @@ pub fn import(grid: &crate::sheet::Grid, name: &str, first_id: u64) -> Result<Im
     }
     out.program.weeks.sort_by_key(|w| w.number);
     if out.program.weeks.iter().all(|w| w.days.is_empty()) {
-        return Err("Couldn't find any weeks in that sheet. It needs rows like “Week 1 | Exercise | …”.".into());
+        return Err(
+            "Couldn't find any weeks in that sheet. It needs rows like “Week 1 | Exercise | …”."
+                .into(),
+        );
     }
     Ok(out)
+}
+
+/// Spreadsheets turn "2-3" into a date, which Excel stores as a day number
+/// (days since 1899-12-30). Turn it back into "2-3".
+#[cfg(feature = "import")]
+fn warmup_text(s: &str) -> String {
+    let Some(serial) = s
+        .parse::<i64>()
+        .ok()
+        .filter(|n| (10_000..100_000).contains(n))
+    else {
+        return s.to_string();
+    };
+    // Civil-from-days (Howard Hinnant), with day 0 = 1970-01-01.
+    let z = serial - 25_569 + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    format!("{m}-{d}")
 }
 
 /// "BLOCK 1: 5-WEEK BUILD PHASE" -> "Block 1: 5-week build phase".
@@ -305,7 +377,9 @@ pub fn import(grid: &crate::sheet::Grid, name: &str, first_id: u64) -> Result<Im
 fn tidy_block(s: &str) -> String {
     let lower = s.trim().to_lowercase();
     let mut c = lower.chars();
-    c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default()
+    c.next()
+        .map(|f| f.to_uppercase().collect::<String>() + c.as_str())
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -313,7 +387,15 @@ mod tests {
     use super::*;
 
     fn set(id: u64, ex: &str, w: f64, r: u32) -> LoggedSet {
-        LoggedSet { id, date: format!("2026-10-{:02}", id), exercise: ex.into(), weight: w, reps: r, week: None, day: String::new() }
+        LoggedSet {
+            id,
+            date: format!("2026-10-{:02}", id),
+            exercise: ex.into(),
+            weight: w,
+            reps: r,
+            week: None,
+            day: String::new(),
+        }
     }
 
     #[test]
@@ -328,7 +410,11 @@ mod tests {
 
     #[test]
     fn records_track_heaviest_and_e1rm_separately() {
-        let sets = [set(1, "Hack Squat", 270.0, 4), set(2, "hack  squat", 225.0, 12), set(3, "Leg Press", 300.0, 8)];
+        let sets = [
+            set(1, "Hack Squat", 270.0, 4),
+            set(2, "hack  squat", 225.0, 12),
+            set(3, "Leg Press", 300.0, 8),
+        ];
         let r = records(&sets);
         let hack = r.iter().find(|r| r.exercise == "Hack Squat").unwrap();
         assert_eq!(hack.heaviest.weight, 270.0);
@@ -342,12 +428,28 @@ mod tests {
         assert!(pr_flags(&set(3, "Bench", 160.0, 3), &hist).weight);
         assert!(!pr_flags(&set(3, "Bench", 135.0, 8), &hist).any());
         assert!(pr_flags(&set(3, "Bench", 135.0, 14), &hist).e1rm);
-        assert!(!pr_flags(&set(3, "Squat", 500.0, 1), &hist).any(), "first time isn't a PR");
+        assert!(
+            !pr_flags(&set(3, "Squat", 500.0, 1), &hist).any(),
+            "first time isn't a PR"
+        );
+    }
+
+    #[cfg(feature = "import")]
+    #[test]
+    fn excel_dates_turn_back_into_warmup_ranges() {
+        assert_eq!(warmup_text("44960"), "2-3"); // 2023-02-03
+        assert_eq!(warmup_text("44928"), "1-2");
+        assert_eq!(warmup_text("2"), "2");
     }
 
     #[test]
     fn last_session_groups_by_date() {
-        let sets = [set(1, "Row", 100.0, 10), set(2, "Row", 110.0, 8), set(2, "Row", 110.0, 7), set(3, "Curl", 30.0, 10)];
+        let sets = [
+            set(1, "Row", 100.0, 10),
+            set(2, "Row", 110.0, 8),
+            set(2, "Row", 110.0, 7),
+            set(3, "Curl", 30.0, 10),
+        ];
         let last = last_session("row", &sets, None);
         assert_eq!(last.len(), 2);
         assert!(last.iter().all(|s| s.weight == 110.0));
@@ -358,17 +460,30 @@ mod tests {
     #[cfg(feature = "import")]
     #[test]
     fn imports_real_file_if_given() {
-        let Ok(path) = std::env::var("IMPORT_TEST_FILE") else { return };
+        let Ok(path) = std::env::var("IMPORT_TEST_FILE") else {
+            return;
+        };
         let grid = crate::sheet::read(&std::fs::read(path).unwrap()).unwrap();
         let imp = import(&grid, "Test", 1).unwrap();
         for w in &imp.program.weeks {
             println!("Week {} ({}): {} days", w.number, w.block, w.days.len());
             for d in &w.days {
-                println!("  {}: {}", d.name, d.exercises.iter().map(|e| format!("{} {}x{}", e.name, e.working_sets, e.reps)).collect::<Vec<_>>().join(", "));
+                println!(
+                    "  {}: {}",
+                    d.name,
+                    d.exercises
+                        .iter()
+                        .map(|e| format!("{} {}x{}", e.name, e.working_sets, e.reps))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
             }
         }
         for s in &imp.sets {
-            println!("SET wk{:?} {} | {} {}x{}", s.week, s.day, s.exercise, s.weight, s.reps);
+            println!(
+                "SET wk{:?} {} | {} {}x{}",
+                s.week, s.day, s.exercise, s.weight, s.reps
+            );
         }
         let ex = &imp.program.weeks[0].days[0].exercises[1];
         println!("SAMPLE {:?}", ex);
