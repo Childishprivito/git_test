@@ -4,6 +4,7 @@ mod photo;
 mod scanner;
 mod server;
 mod store;
+mod workout_ui;
 
 pub use foodlog_core::model;
 

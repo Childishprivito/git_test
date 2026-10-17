@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-foodlog-core = { path = "../foodlog-core" }
+foodlog-core = { path = "../foodlog-core", features = ["import"] }
 leptos = { version = "0.8", features = ["csr"] }
 rxing = { version = "0.9.3", default-features = false, features = ["decoders", "oned", "no_character_set_support", "wasm_support"] }
 gloo-net = { version = "0.7", default-features = false, features = ["http", "json"] }

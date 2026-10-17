@@ -185,3 +185,35 @@ input[type="file"] { padding: 10px; min-height: 52px; }
 h3 { font-size: 1rem; margin: 12px 0 4px; }
 .ai > .btn { width: 100%; margin-top: 8px; white-space: normal; padding: 8px 12px; }
 .ai .status:empty, .ai .error:empty { display: none; }
+
+/* ---------- Workout ---------- */
+.up-next h2 { font-size: 1.4rem; margin: 2px 0 4px; }
+.up-next p { margin: 0 0 4px; }
+.week-title { flex: 1; text-align: center; }
+.week-title h2 { margin: 0; }
+.check {
+  width: 28px; height: 28px; border-radius: 50%; flex: none;
+  border: 2px solid var(--line); display: grid; place-items: center; font-weight: 700;
+}
+.check.done { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.session-head { padding-top: 4px; }
+.session-head + h1 { margin-top: 4px; }
+.exercise h2 { font-size: 1.1rem; margin: 0; }
+.exercise p { margin: 4px 0; }
+.pill { display: inline-block; background: var(--accent-soft); border-radius: 99px; padding: 2px 10px; font-size: 0.85rem; }
+.history { background: var(--bg); border-radius: 10px; padding: 8px 10px; }
+.small-select { margin: 6px 0; }
+.small-select select { min-height: 40px; flex: 1; }
+.sets { list-style: none; padding: 0; margin: 6px 0 0; counter-reset: set; }
+.set-row { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); min-height: 44px; font-variant-numeric: tabular-nums; }
+.set-row::before { counter-increment: set; content: "Set " counter(set); color: var(--muted); font-size: 0.85rem; width: 3.2em; }
+.set-entry { display: grid; grid-template-columns: 3.2em 1fr auto 1fr auto; gap: 6px; align-items: center; margin-top: 8px; }
+.set-entry input { min-width: 0; text-align: center; font-variant-numeric: tabular-nums; }
+.set-no { white-space: nowrap; }
+details > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 600; }
+details.record > summary { font-weight: 400; list-style: none; }
+details.record > summary::-webkit-details-marker { display: none; }
+.notes, .history-list { padding-left: 1.2em; margin: 4px 0 8px; }
+.notes li, .history-list li { margin: 4px 0; }
+.danger-text { color: var(--danger); }
+.tab { font-size: 0.75rem; }

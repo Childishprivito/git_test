@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::workout::{LoggedSet, Program};
+
 /// Nutrition facts, always stored per 100 g so amounts are easy to scale.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Food {
@@ -139,6 +141,17 @@ pub struct Db {
     /// Ids of removed diary entries, so a removal on one device sticks on the others.
     #[serde(default)]
     pub deleted: Vec<u64>,
+    /// Your training program (imported from a spreadsheet).
+    #[serde(default)]
+    pub program: Option<Program>,
+    #[serde(default)]
+    pub program_updated: u64,
+    /// Every set you've logged.
+    #[serde(default)]
+    pub sets: Vec<LoggedSet>,
+    /// Ids of removed sets.
+    #[serde(default)]
+    pub deleted_sets: Vec<u64>,
 }
 
 impl Db {
@@ -179,6 +192,13 @@ impl Db {
         }
     }
 
+    pub fn remove_set(&mut self, id: u64) {
+        self.sets.retain(|s| s.id != id);
+        if !self.deleted_sets.contains(&id) {
+            self.deleted_sets.push(id);
+        }
+    }
+
     pub fn set_goals(&mut self, goals: Goals, now_ms: u64) {
         self.goals = goals;
         self.goals_updated = now_ms;
@@ -215,13 +235,29 @@ impl Db {
         } else {
             (self.goals.clone(), self.goals_updated)
         };
-        Db {
-            entries,
-            foods,
-            goals,
-            goals_updated,
-            deleted,
+
+        let mut deleted_sets = self.deleted_sets.clone();
+        for id in &other.deleted_sets {
+            if !deleted_sets.contains(id) {
+                deleted_sets.push(*id);
+            }
         }
+        deleted_sets.sort_unstable();
+        let mut sets: Vec<LoggedSet> = Vec::new();
+        for s in self.sets.iter().chain(&other.sets) {
+            if deleted_sets.binary_search(&s.id).is_err() && !sets.iter().any(|x| x.id == s.id) {
+                sets.push(s.clone());
+            }
+        }
+        sets.sort_by_key(|s| s.id);
+
+        let (program, program_updated) = if other.program_updated > self.program_updated {
+            (other.program.clone(), other.program_updated)
+        } else {
+            (self.program.clone(), self.program_updated)
+        };
+
+        Db { entries, foods, goals, goals_updated, deleted, program, program_updated, sets, deleted_sets }
     }
 
     pub fn find_food(&self, id: &str) -> Option<Food> {
@@ -317,6 +353,22 @@ mod tests {
         );
         assert_eq!(phone.merge(&server).goals.kcal, 1800.0);
         assert_eq!(server.merge(&phone).goals.kcal, 1800.0);
+    }
+
+    #[test]
+    fn merge_combines_workout_sets_and_keeps_newest_program() {
+        use crate::workout::{LoggedSet, Program};
+        let set = |id| LoggedSet { id, date: "2026-10-17".into(), exercise: "Row".into(), weight: 100.0, reps: 10, week: None, day: String::new() };
+        let mut phone = Db { sets: vec![set(1), set(2)], ..Db::default() };
+        phone.program = Some(Program { name: "New".into(), weeks: vec![] });
+        phone.program_updated = 20;
+        let mut server = Db { sets: vec![set(1), set(3)], ..Db::default() };
+        server.program = Some(Program { name: "Old".into(), weeks: vec![] });
+        server.program_updated = 10;
+        server.remove_set(2);
+        let m = phone.merge(&server);
+        assert_eq!(m.sets.iter().map(|s| s.id).collect::<Vec<_>>(), [1, 3]);
+        assert_eq!(m.program.unwrap().name, "New");
     }
 
     #[test]

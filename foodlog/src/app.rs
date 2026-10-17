@@ -12,16 +12,17 @@ use crate::{
 };
 
 #[derive(Clone, Copy, PartialEq)]
-enum Tab {
+pub(crate) enum Tab {
     Diary,
     Add,
+    Workout,
     Settings,
 }
 
 /// Shared app state, handed to every screen through context.
 #[derive(Clone, Copy)]
-struct Ctx {
-    db: RwSignal<Db>,
+pub(crate) struct Ctx {
+    pub db: RwSignal<Db>,
     /// 0 = today, -1 = yesterday, ...
     day: RwSignal<i32>,
     tab: RwSignal<Tab>,
@@ -35,13 +36,15 @@ struct Ctx {
     sync_status: RwSignal<String>,
     /// Bump to sync right away (e.g. "Sync now" button, app reopened).
     sync_nudge: RwSignal<u32>,
+    /// The workout being done: (program week, day index).
+    pub session: RwSignal<Option<(u32, usize)>>,
 }
 
-fn ctx() -> Ctx {
+pub(crate) fn ctx() -> Ctx {
     expect_context::<Ctx>()
 }
 
-fn parse_num(s: &str) -> Option<f64> {
+pub(crate) fn parse_num(s: &str) -> Option<f64> {
     s.trim()
         .replace(',', ".")
         .parse::<f64>()
@@ -69,8 +72,10 @@ pub fn App() -> impl IntoView {
         toast: RwSignal::new(String::new()),
         sync_status: RwSignal::new(String::new()),
         sync_nudge: RwSignal::new(0),
+        session: RwSignal::new(None),
     };
     provide_context(c);
+    TOAST.with(|t| t.set(Some(c.toast)));
     start_sync(c);
 
     let tab_button = move |t: Tab, label: &'static str, icon: &'static str| {
@@ -92,6 +97,7 @@ pub fn App() -> impl IntoView {
             {move || match c.tab.get() {
                 Tab::Diary => view! { <Diary/> }.into_any(),
                 Tab::Add => view! { <AddFood/> }.into_any(),
+                Tab::Workout => view! { <crate::workout_ui::WorkoutTab/> }.into_any(),
                 Tab::Settings => view! { <Settings/> }.into_any(),
             }}
         </main>
@@ -104,6 +110,7 @@ pub fn App() -> impl IntoView {
         <nav class="tabs" aria-label="Main">
             {tab_button(Tab::Diary, "Diary", "📖")}
             {tab_button(Tab::Add, "Add food", "➕")}
+            {tab_button(Tab::Workout, "Workout", "🏋️")}
             {tab_button(Tab::Settings, "Settings", "⚙️")}
         </nav>
     }
@@ -185,8 +192,15 @@ fn start_sync(c: Ctx) {
     on_visible.forget(); // lives as long as the app
 }
 
-fn flash(msg: impl Into<String>) {
-    let toast = ctx().toast;
+thread_local! {
+    /// The toast message, reachable from async tasks (which have no context).
+    static TOAST: std::cell::Cell<Option<RwSignal<String>>> = const { std::cell::Cell::new(None) };
+}
+
+pub(crate) fn flash(msg: impl Into<String>) {
+    let Some(toast) = TOAST.with(|t| t.get()) else {
+        return;
+    };
     let msg = msg.into();
     toast.set(msg.clone());
     set_timeout(
