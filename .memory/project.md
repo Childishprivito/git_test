@@ -35,7 +35,7 @@ Expo-side workflow: `foodlog-mobile/.eas/workflows/publish-preview.yml` (EAS Upd
 
 ## Accounts / setup state
 - GitHub Pages: source = GitHub Actions (done).
-- **Expo**: account `dauno`, project **projectfitness**, ID `aac44430-ef08-4e0e-baff-2f5a2affd45f`
+- **Expo**: login `dauno`, owner/team **`daunos-team`** (app.json `owner` must match the project's owner), project **projectfitness**, ID `aac44430-ef08-4e0e-baff-2f5a2affd45f`
   (app.json slug `projectfitness`, name "FoodLog"). GitHub repo linked on expo.dev with base directory
   `/foodlog-mobile`. First EAS workflow was running at time of writing → then open Updates › preview in Expo Go.
 - **Cloudflare server — TODO (user)**: add repo secrets `CLOUDFLARE_API_TOKEN` ("Edit Cloudflare Workers"
