@@ -14,7 +14,7 @@ Everything except Apple Health works in the free **Expo Go** app.
 
 The app is linked to the Expo project `dauno/projectfitness`, and that project is
 connected to this GitHub repo (expo.dev › project › Project settings › GitHub,
-base directory `foodlog-mobile`). On every push to `master`, Expo runs
+base directory `/foodlog-mobile`). On every push to `master`, Expo runs
 `.eas/workflows/publish-preview.yml` and publishes the app.
 
 1. Install **Expo Go** from the App Store and sign in with the same Expo account.
