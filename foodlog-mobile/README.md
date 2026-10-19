@@ -12,15 +12,14 @@ web app, so both stay in sync.
 
 Everything except Apple Health works in the free **Expo Go** app.
 
-1. Install **Expo Go** from the App Store and sign up at expo.dev (free).
-2. On expo.dev: avatar › Access tokens › **Create token**. Copy it.
-3. In this repo on GitHub: Settings › Secrets and variables › Actions ›
-   New repository secret named `EXPO_TOKEN` with that token.
-4. Actions › **FoodLog mobile** › Run workflow. It checks the code and publishes it.
-5. On expo.dev open the **foodlog** project › Updates › `preview`, and tap
-   **Open with Expo Go** on your phone (sign in to Expo Go with the same account).
+The app is linked to the Expo project `dauno/foodlog`, and that project is
+connected to this GitHub repo (expo.dev › project › Project settings › GitHub,
+base directory `foodlog-mobile`). On every push to `master`, Expo runs
+`.eas/workflows/publish-preview.yml` and publishes the app.
 
-After that, every push to `master` that touches `foodlog-mobile/` publishes a new version automatically.
+1. Install **Expo Go** from the App Store and sign in with the same Expo account.
+2. On expo.dev open the project › **Updates** › `preview`, and tap
+   **Open with Expo Go** (or scan its QR code with the iPhone camera).
 
 ## The real app with Apple Health
 

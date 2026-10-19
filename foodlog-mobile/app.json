@@ -65,6 +65,18 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "owner": "dauno",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/aac44430-ef08-4e0e-baff-2f5a2affd45f"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "aac44430-ef08-4e0e-baff-2f5a2affd45f"
+      }
     }
   }
 }

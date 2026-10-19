@@ -1,0 +1,15 @@
+# Runs on Expo's servers (via the GitHub connection on expo.dev) whenever
+# master changes: publishes the app so it opens in Expo Go from the
+# project's Updates page.
+name: Publish preview update
+
+on:
+  push:
+    branches: ['master']
+
+jobs:
+  publish_preview_update:
+    name: Publish preview update
+    type: update
+    params:
+      branch: preview

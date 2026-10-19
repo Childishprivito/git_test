@@ -1,7 +1,8 @@
 name: FoodLog mobile
 
-# Checks the Expo app, then (once EXPO_TOKEN is set) publishes it with
-# EAS Update so you can open it in Expo Go. Run it by hand with
+# Checks the Expo app (typecheck + lint). Publishing for Expo Go happens on
+# Expo's side via .eas/workflows/ and the GitHub connection on expo.dev;
+# the EXPO_TOKEN steps below are an optional alternative. Run it by hand with
 # "Build iPhone app" ticked to make a real build with Apple Health
 # (needs the $99 Apple Developer account linked in Expo).
 on:
@@ -49,10 +50,6 @@ jobs:
           else
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
-
-      - name: Link the Expo project
-        if: steps.check.outputs.ready == 'true'
-        run: npx eas-cli@25.1.1 init --non-interactive --force
 
       - name: Publish to Expo Go (EAS Update)
         if: steps.check.outputs.ready == 'true'
