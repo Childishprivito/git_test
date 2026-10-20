@@ -1,6 +1,6 @@
 # FoodLog mobile (Expo / React Native)
 
-The FoodLog app as a native iPhone (and Android) app, built with Expo. Same
+The FoodLog app as a native iPhone (and Android) app, built with Expo. Built on Expo **SDK 57**, the version the App Store's Expo Go supports. Same
 features as the web app: diary, barcode scanning, food search, photo search,
 workouts with PRs, plus **Apple Health**: meals and workouts are saved to
 Health, and today's steps and active calories show on the diary.

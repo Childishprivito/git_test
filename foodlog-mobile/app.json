@@ -61,7 +61,10 @@
           "NSHealthUpdateUsageDescription": "FoodLog saves the meals and workouts you log to Apple Health.",
           "background": false
         }
-      ]
+      ],
+      "expo-font",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

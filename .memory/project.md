@@ -11,7 +11,7 @@ short and phone-friendly. Last updated: 2026-10-19.
 | `foodlog/` | **Web app** in Rust (Leptos → WebAssembly), installable PWA | **Live**: https://childishprivito.github.io/git_test/ |
 | `foodlog-core/` | Shared Rust crate: data model + sync merge, Open Food Facts/USDA parsing, AI estimate schema, workout model/PRs, `.ods/.xlsx` reader (feature `import`) | Used by web app + server |
 | `foodlog-worker/` | **Server** in Rust on Cloudflare Workers: `/sync` (KV), `/estimate` (Claude, photo → product + nutrition), `/usda` | Code done, **not deployed** (secrets missing) |
-| `foodlog-mobile/` | **Expo / React Native** app (SDK 58, Expo Router, TS) — same features + Apple Health | Linked to Expo; first publish in progress |
+| `foodlog-mobile/` | **Expo / React Native** app (**SDK 57**, Expo Router, TS) — same features + Apple Health | Linked to Expo; publishing via EAS Workflows |
 
 Workflows: `.github/workflows/foodlog.yml` (test + build + deploy web to Pages on master),
 `foodlog-worker.yml` (deploy server; skips until Cloudflare secrets exist),
@@ -53,6 +53,10 @@ Expo-side workflow: `foodlog-mobile/.eas/workflows/publish-preview.yml` (EAS Upd
 - Ideas not built yet: rest timer after logging a set; weekly charts/export.
 
 ## Working notes for future sessions
+- **Stay on the Expo SDK that App Store Expo Go supports** (Expo Go 57.0.9 → SDK 57 as of 2026-10-20).
+  SDK 58 was out but Expo Go showed "Project is incompatible with this version of Expo Go".
+  Only move to a newer SDK once Expo Go › Settings › Supported SDK shows it (or once using a dev/TestFlight build).
+- Expo Go must be signed in as a member of `daunos-team` (the project is private) or it shows HTTP 403.
 - Sandbox network blocks openfoodfacts, docs.expo.dev, api.expo.dev, *.github.io, cloudflare — test with
   Playwright route mocks; use `EXPO_OFFLINE=1` for `npx expo install/config/prebuild/lint/export`.
 - Expo APIs drift: read package `.d.ts` files in node_modules (docs site blocked). AGENTS.md in foodlog-mobile.
