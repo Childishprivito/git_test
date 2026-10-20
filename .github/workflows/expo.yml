@@ -1,0 +1,66 @@
+name: Expo tools
+
+# Run by hand (or by Claude) to talk to Expo with the EXPO_TOKEN secret.
+# Results go to the job log, so they can be read back from GitHub.
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: What to do
+        type: choice
+        options: [status, publish, logs, simulator-check]
+        default: status
+      run_id:
+        description: Expo workflow run ID (for "logs"; empty = latest)
+        type: string
+        required: false
+
+jobs:
+  expo:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: foodlog-mobile
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EAS: npx --yes eas-cli@25.1.1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: foodlog-mobile/package-lock.json
+      - run: npm ci
+
+      - name: Who am I
+        run: $EAS whoami
+
+      - name: Status (Expo workflow runs and latest updates)
+        if: inputs.task == 'status'
+        run: |
+          echo "::group::Expo workflow runs"
+          $EAS workflow:runs --json --non-interactive || $EAS workflow:runs
+          echo "::endgroup::"
+          echo "::group::Updates on branch preview"
+          $EAS update:list --branch preview --json --non-interactive
+          echo "::endgroup::"
+
+      - name: Publish to Expo Go (EAS Update, branch preview)
+        if: inputs.task == 'publish'
+        run: $EAS update --branch preview --non-interactive --message "$(git log -1 --pretty=%s)"
+
+      - name: Logs of an Expo workflow run
+        if: inputs.task == 'logs'
+        env:
+          RUN_ID: ${{ inputs.run_id }}
+        run: |
+          if [ -z "$RUN_ID" ]; then
+            RUN_ID=$($EAS workflow:runs --json --non-interactive | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);const r=Array.isArray(j)?j:(j.runs||j.workflowRuns||[]);console.log(r[0]?.id||"")})')
+          fi
+          echo "Run: $RUN_ID"
+          $EAS workflow:logs "$RUN_ID" --all-steps --non-interactive
+
+      - name: Is EAS Simulator available?
+        if: inputs.task == 'simulator-check'
+        run: $EAS simulator:availability --json --non-interactive
