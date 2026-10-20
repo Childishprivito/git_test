@@ -1,17 +1,16 @@
 // Coach's AI connection. Any provider works: Coach speaks one simple chat
 // format, and each provider gets a small adapter.
 //  - Claude: Anthropic's official SDK.
-//  - OpenRouter, OpenAI, Google Gemini and local models (Ollama, LM Studio)
-//    all accept the OpenAI-style chat API, so they share one adapter.
+//  - OpenAI, Google Gemini and local models (Ollama, LM Studio) all accept
+//    the OpenAI-style chat API, so they share one adapter.
 import Anthropic from '@anthropic-ai/sdk';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 import { COACH_TOOLS, CoachIndex } from './coachIndex';
 
-export type ProviderId = 'openrouter' | 'anthropic' | 'openai' | 'google' | 'custom';
+export type ProviderId = 'anthropic' | 'openai' | 'google' | 'custom';
 
 export interface Provider {
   id: ProviderId;
@@ -24,14 +23,6 @@ export interface Provider {
 }
 
 export const PROVIDERS: Provider[] = [
-  {
-    id: 'openrouter',
-    name: 'OpenRouter (any model)',
-    kind: 'openai-compatible',
-    baseUrl: 'https://openrouter.ai/api/v1',
-    defaultModel: 'openrouter/auto',
-    keyHelp: 'Sign in below, or paste a key from openrouter.ai › Keys.',
-  },
   {
     id: 'anthropic',
     name: 'Claude',
@@ -108,29 +99,6 @@ export async function forgetAi() {
   await secret.del();
 }
 
-// ---- OpenRouter sign-in (OAuth PKCE: the user approves, we get their own key)
-
-const b64url = (s: string) => s.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-
-export async function openRouterSignInUrl(callbackUrl: string): Promise<{ url: string; verifier: string }> {
-  const verifier = b64url(btoa(String.fromCharCode(...Crypto.getRandomBytes(32))));
-  const challenge = b64url(await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, verifier, { encoding: Crypto.CryptoEncoding.BASE64 }));
-  const url = `https://openrouter.ai/auth?callback_url=${encodeURIComponent(callbackUrl)}&code_challenge=${challenge}&code_challenge_method=S256`;
-  return { url, verifier };
-}
-
-export async function openRouterExchange(code: string, verifier: string): Promise<string> {
-  const res = await fetch('https://openrouter.ai/api/v1/auth/keys', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ code, code_verifier: verifier, code_challenge_method: 'S256' }),
-  });
-  if (!res.ok) throw new Error(`OpenRouter sign-in failed (${res.status})`);
-  const { key } = (await res.json()) as { key?: string };
-  if (!key) throw new Error('OpenRouter sign-in returned no key');
-  return key;
-}
-
 // ---- Chat
 
 /** What the chat screen keeps: plain text turns, the same for every provider. */
@@ -164,7 +132,7 @@ export async function askCoach(
   const model = ai.config.model.trim() || p.defaultModel;
   return p.kind === 'anthropic'
     ? askClaude(ai.key, model, history, index, today)
-    : askOpenAiCompatible(ai.config.baseUrl.trim() || p.baseUrl, ai.key, model, history, index, today, p.id);
+    : askOpenAiCompatible(ai.config.baseUrl.trim() || p.baseUrl, ai.key, model, history, index, today);
 }
 
 async function askClaude(apiKey: string, model: string, history: ChatTurn[], index: CoachIndex, today: string): Promise<ChatTurn> {
@@ -227,13 +195,11 @@ async function askOpenAiCompatible(
   history: ChatTurn[],
   index: CoachIndex,
   today: string,
-  provider: ProviderId,
 ): Promise<ChatTurn> {
   const tools = COACH_TOOLS.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } }));
   const messages: OaMessage[] = [{ role: 'system', content: systemPrompt(today) }, ...history.map((h) => ({ role: h.role, content: h.text }))];
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (key) headers.authorization = `Bearer ${key}`;
-  if (provider === 'openrouter') headers['x-title'] = 'FoodLog Coach';
   const looked: string[] = [];
   for (let round = 0; round < MAX_ROUNDS; round++) {
     const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/chat/completions`, {

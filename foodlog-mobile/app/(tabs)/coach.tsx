@@ -1,14 +1,12 @@
 // Coach: chat with an AI coach that can look up your meals, workouts, PRs and
 // Apple Health activity (lib/coachIndex.ts). Works with any AI (lib/ai.ts).
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Linking from 'expo-linking';
-import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Share, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, Card, Field, H, T, styles, useTheme } from '@/components/ui';
-import { AiConfig, ChatTurn, PROVIDERS, ProviderId, askCoach, forgetAi, loadAi, openRouterExchange, openRouterSignInUrl, providerOf, saveAi } from '@/lib/ai';
+import { AiConfig, ChatTurn, PROVIDERS, ProviderId, askCoach, forgetAi, loadAi, providerOf, saveAi } from '@/lib/ai';
 import { Activity, coachSnapshot } from '@/lib/coach';
 import { CoachIndex } from '@/lib/coachIndex';
 import { healthAvailable, todayActivity } from '@/lib/health';
@@ -23,13 +21,12 @@ type Ai = { config: AiConfig; key: string };
 function Connect({ current, onDone, onCancel }: { current: Ai | null; onDone: (ai: Ai) => void; onCancel?: () => void }) {
   const t = useTheme();
   const { db } = useStore();
-  const [provider, setProvider] = useState<ProviderId>(current?.config.provider ?? 'openrouter');
+  const [provider, setProvider] = useState<ProviderId>(current?.config.provider ?? 'anthropic');
   const p = providerOf(provider);
   const [model, setModel] = useState(current?.config.model ?? p.defaultModel);
   const [baseUrl, setBaseUrl] = useState(current?.config.baseUrl ?? p.baseUrl);
   const [key, setKey] = useState('');
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
 
   const choose = (id: ProviderId) => {
     const np = providerOf(id);
@@ -44,24 +41,6 @@ function Connect({ current, onDone, onCancel }: { current: Ai | null; onDone: (a
     const ai = { config: { provider, model: model.trim() || p.defaultModel, baseUrl: baseUrl.trim() }, key: k.trim() };
     await saveAi(ai.config, ai.key);
     onDone(ai);
-  };
-
-  const signInOpenRouter = async () => {
-    setError('');
-    setBusy(true);
-    try {
-      const callback = Linking.createURL('coach');
-      const { url, verifier } = await openRouterSignInUrl(callback);
-      const res = await WebBrowser.openAuthSessionAsync(url, callback);
-      if (res.type !== 'success') return;
-      const code = Linking.parse(res.url).queryParams?.code;
-      if (typeof code !== 'string') throw new Error('OpenRouter did not send a sign-in code.');
-      await save(await openRouterExchange(code, verifier));
-    } catch (e) {
-      setError(`${(e as Error).message} You can paste a key instead.`);
-    } finally {
-      setBusy(false);
-    }
   };
 
   return (
@@ -84,12 +63,9 @@ function Connect({ current, onDone, onCancel }: { current: Ai | null; onDone: (a
         ))}
         <View style={{ height: 10 }} />
         <T small muted>{p.keyHelp}</T>
-        {provider === 'openrouter' && (
-          <Button kind="primary" title="Sign in with OpenRouter" busy={busy} onPress={signInOpenRouter} style={{ marginVertical: 10 }} />
-        )}
         <Field label={p.keyOptional ? 'API key (optional)' : 'API key'} value={key} onChangeText={setKey} secureTextEntry autoCapitalize="none" autoCorrect={false} placeholder={current ? 'Leave empty to keep the saved key' : ''} />
         <Field label="Model" value={model} onChangeText={setModel} autoCapitalize="none" autoCorrect={false} />
-        {p.kind === 'openai-compatible' && provider !== 'openrouter' && (
+        {p.kind === 'openai-compatible' && (
           <Field label="Server address" value={baseUrl} onChangeText={setBaseUrl} autoCapitalize="none" autoCorrect={false} keyboardType="url" />
         )}
         {!!error && <T style={{ color: t.danger, marginTop: 8 }}>{error}</T>}

@@ -46,10 +46,9 @@ Expo-side workflow: `foodlog-mobile/.eas/workflows/publish-preview.yml` (EAS Upd
 - **Coach (AI tab)**: tabs are Diary · Coach · Workout · Settings; Add food is a pushed screen (`app/add.tsx`)
   opened from the Diary's "+ Add food" button. Coach is provider-agnostic (`lib/ai.ts`): Claude via the official
   `@anthropic-ai/sdk` (claude-opus-5-5, effort low, `fallbacks: "default"`), and one OpenAI-compatible adapter for
-  OpenRouter (sign-in via OAuth PKCE + paste key), OpenAI, Gemini, and local/custom servers (Ollama). Keys in
+  OpenAI, Gemini, and local/custom servers (Ollama). OpenRouter was tried and removed at the user's request. Keys in
   expo-secure-store. The "local index" is `lib/coachIndex.ts`: 8 tools over the on-phone log (overview, meals,
   nutrition trends, food search, exercises, exercise history, workouts, program day); the AI calls them as needed.
-  Untested on device: OpenRouter sign-in redirect from Expo Go (exp:// callback) — paste-a-key is the fallback.
   Login research (Oct 2026): Claude subscription login in third-party apps is NOT allowed (API key only);
   OpenAI "Sign in with ChatGPT" (Sep 2026) allows plan usage for open-source/personal apps — not built yet.
   Future: a paid house agent; an MCP server on the worker so Claude/ChatGPT apps can use the data.
