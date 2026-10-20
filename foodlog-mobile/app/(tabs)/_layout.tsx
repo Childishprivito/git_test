@@ -20,8 +20,8 @@ export default function TabLayout() {
         options={{ title: 'Diary', tabBarIcon: icon({ ios: 'book.fill', android: 'menu_book', web: 'menu_book' }) }}
       />
       <Tabs.Screen
-        name="add"
-        options={{ title: 'Add food', tabBarIcon: icon({ ios: 'plus.circle.fill', android: 'add_circle', web: 'add_circle' }) }}
+        name="coach"
+        options={{ title: 'Coach', tabBarIcon: icon({ ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' }) }}
       />
       <Tabs.Screen
         name="workout"

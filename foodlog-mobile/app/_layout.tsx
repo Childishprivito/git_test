@@ -36,6 +36,7 @@ export default function RootLayout() {
         <ThemeProvider value={scheme === 'dark' ? DarkTheme : DefaultTheme}>
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="add" options={{ title: 'Add food', headerBackTitle: 'Diary' }} />
             <Stack.Screen name="scan" options={{ presentation: 'fullScreenModal', headerShown: false }} />
             <Stack.Screen name="amount" options={{ presentation: 'modal', title: 'How much?' }} />
             <Stack.Screen name="session" options={{ title: 'Workout' }} />

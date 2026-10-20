@@ -43,6 +43,12 @@ Expo-side workflow: `foodlog-mobile/.eas/workflows/publish-preview.yml` (EAS Upd
   "FoodLog server" workflow; put the workers.dev URL + password in app Settings › Sync & AI.
 - **Apple Health on device — TODO**: needs Apple Developer Program ($99/yr); then EAS build → TestFlight
   (`mobile.yml` dispatch with build_ios, or eas.json production profile).
+- **Coach (AI tab) — in progress**: mobile tabs are Diary · Coach · Workout · Settings; Add food is a pushed
+  screen (`app/add.tsx`) opened from the Diary's "+ Add food" button. `lib/coach.ts` builds the text snapshot
+  (goals, 7 days of meals, program up next, recent sets, PRs, Health activity); today the tab only shares it.
+  Login research (Oct 2026): Claude subscription login in third-party apps is NOT allowed (API key only);
+  OpenAI "Sign in with ChatGPT" (DevDay Sep 2026) allows plan usage for open-source/personal apps, others waitlist.
+  Other route: expose the data as an MCP server on the worker → add as a custom connector in Claude/ChatGPT apps.
 
 ## Decisions & constraints
 - User's PPL spreadsheet is **copyrighted (Jeff Nippard)** — never commit it or its contents; it is imported

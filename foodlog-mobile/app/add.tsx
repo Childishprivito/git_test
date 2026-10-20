@@ -251,9 +251,8 @@ export default function AddFood() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.screen} keyboardShouldPersistTaps="handled">
-        <H level={1}>Add food</H>
         <Segmented<Meal> label="Meal" value={meal} onChange={setMeal} options={MEALS.map((m) => ({ value: m, label: m }))} />
 
         <Button kind="primary" big title="📷  Scan barcode" onPress={() => router.push('/scan')} style={{ marginVertical: 12 }} />

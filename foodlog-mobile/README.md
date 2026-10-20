@@ -48,7 +48,8 @@ npx expo lint           # lint
 | Path | What it does |
 | --- | --- |
 | `app/(tabs)/index.tsx` | Diary: totals, goals, meals, Apple Health activity |
-| `app/(tabs)/add.tsx` | Add food: scan, barcode, search, photo search, custom foods |
+| `app/add.tsx` | Add food (opened from the Diary): scan, barcode, search, photo search, custom foods |
+| `app/(tabs)/coach.tsx`, `lib/coach.ts` | Coach tab: AI coach snapshot of meals, workouts, PRs and Apple Health |
 | `app/(tabs)/workout.tsx` | Program import, up next, weeks, quick log, PRs |
 | `app/session.tsx` | A workout day: last time, PRs, logging sets |
 | `app/(tabs)/settings.tsx` | Goals, server, Apple Health |

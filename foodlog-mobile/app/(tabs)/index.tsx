@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Bar, Button, Card, H, T, styles, useTheme } from '@/components/ui';
 import { healthAvailable, todayActivity } from '@/lib/health';
-import { MEALS, dateString, dayTotals, foodTitle, macrosFor } from '@/lib/model';
+import { MEALS, Meal, dateString, dayTotals, foodTitle, macrosFor, mealForHour } from '@/lib/model';
 import { useStore } from '@/lib/store';
 
 function dayLabel(offset: number) {
@@ -25,6 +25,11 @@ export default function Diary() {
   const g = db.goals;
   const left = g.kcal - totals.kcal;
   const [activity, setActivity] = useState<{ steps: number; active: number } | null>(null);
+
+  const addFood = (meal: Meal) => {
+    setMeal(meal);
+    router.push('/add');
+  };
 
   useEffect(() => {
     if (offset === 0 && healthAvailable()) todayActivity().then(setActivity).catch(() => setActivity(null));
@@ -57,6 +62,15 @@ export default function Diary() {
             </T>
           )}
         </Card>
+
+        <Button
+          kind="primary"
+          big
+          title="+  Add food"
+          label={`Add food to ${mealForHour(new Date().getHours())}`}
+          onPress={() => addFood(mealForHour(new Date().getHours()))}
+          style={{ marginBottom: 12 }}
+        />
 
         {MEALS.map((meal) => {
           const entries = db.entries.filter((e) => e.date === date && e.meal === meal);
@@ -92,10 +106,7 @@ export default function Diary() {
               <Button
                 kind="ghost"
                 title={`+ Add to ${meal}`}
-                onPress={() => {
-                  setMeal(meal);
-                  router.navigate('/add');
-                }}
+                onPress={() => addFood(meal)}
                 style={{ alignSelf: 'flex-start' }}
               />
             </Card>
