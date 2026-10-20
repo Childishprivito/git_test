@@ -2,22 +2,25 @@
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, Card, Field, H, Segmented, T, styles, useTheme } from '@/components/ui';
-import { Food, MEALS, Meal, foodTitle, remember } from '@/lib/model';
+import { searchBuiltIn } from '@/lib/foodDb';
+import { Food, MEALS, Meal, foodTitle, remember, timesLogged } from '@/lib/model';
 import * as off from '@/lib/off';
 import { Estimate, estimate, loadConfig, usda } from '@/lib/server';
 import { error as logError, info, warn } from '@/lib/log';
 import { useStore } from '@/lib/store';
 
-function FoodRow({ food, onPress }: { food: Food; onPress: () => void }) {
+function FoodRow({ food, onPress, times }: { food: Food; onPress: () => void; times?: number }) {
   const t = useTheme();
-  const detail = food.serving_g
-    ? `${Math.round((food.kcal * food.serving_g) / 100)} kcal per serving (${Math.round(food.serving_g)} g)`
+  const per = food.serving_g
+    ? `${Math.round((food.kcal * food.serving_g) / 100)} kcal per ${food.serving_label || 'serving'} (${Math.round(food.serving_g)} g)`
     : `${Math.round(food.kcal)} kcal per 100 g`;
+  const source = food.id.startsWith('usda-') ? ' · USDA' : '';
+  const detail = `${per}${source}${times ? ` · logged ${times}×` : ''}`;
   return (
     <Pressable
       accessibilityRole="button"
@@ -175,7 +178,13 @@ export default function AddFood() {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
-  const [results, setResults] = useState<Food[]>([]);
+  const [results, setResults] = useState<{ saved: Food[]; common: Food[]; online: Food[] } | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  const logged = useMemo(() => timesLogged(db), [db]);
+  const yourFoods = useMemo(
+    () => [...db.foods].sort((a, b) => (logged.get(b.id) ?? 0) - (logged.get(a.id) ?? 0)),
+    [db.foods, logged],
+  );
   const [customFor, setCustomFor] = useState<string | null>(null);
   const [photoFor, setPhotoFor] = useState<string | null>(null);
   const [aiEst, setAiEst] = useState<Estimate | null>(null);
@@ -239,18 +248,24 @@ export default function AddFood() {
     const seq = ++searchSeq.current;
     const stale = () => seq !== searchSeq.current;
     const words = q.toLowerCase().split(/\s+/);
-    let found = db.foods.filter((f) => words.every((w) => foodTitle(f).toLowerCase().includes(w)));
-    setResults(found);
+    // 1. Your foods, most-logged first. 2. Built-in common foods (instant, offline).
+    const saved = db.foods
+      .filter((f) => words.every((w) => foodTitle(f).toLowerCase().includes(w)))
+      .sort((a, b) => (logged.get(b.id) ?? 0) - (logged.get(a.id) ?? 0));
+    const common = searchBuiltIn(q).filter((f) => !saved.some((s) => s.id === f.id));
+    let online: Food[] = [];
+    setResults({ saved, common, online });
     setPhotoFor(null);
     setCustomFor(null);
     setBusy(true);
-    setStatus('Searching…');
-    info('search', `Searching "${q}" (${found.length} saved matches)`);
+    setStatus('Searching brands…');
+    info('search', `Searching "${q}": ${saved.length} of your foods, ${common.length} common foods`);
     const errors: string[] = [];
+    // 3. Branded foods online.
     const add = (more: Food[]) => {
       if (stale()) return;
-      for (const f of more) if (!found.some((x) => x.id === f.id)) found = [...found, f];
-      setResults(found);
+      for (const f of more) if (![...saved, ...common, ...online].some((x) => x.id === f.id)) online = [...online, f];
+      setResults({ saved, common, online });
     };
     // Both sources at once; one failing doesn't stop the other.
     await Promise.all([
@@ -259,10 +274,10 @@ export default function AddFood() {
     ]);
     if (stale()) return;
     if (errors.length) warn('search', `"${q}" finished with problems`, errors);
-    const empty = found.length === 0;
+    const empty = saved.length + common.length + online.length === 0;
     if (empty && errors.length) setStatus(errors.join(' '));
     else if (empty) setStatus(hasServer ? 'No matches. Snap the package (or your plate) and AI will find it.' : 'No matches. Try fewer words, or add a custom food.');
-    else setStatus(errors.length ? `Some results may be missing. ${errors.join(' ')}` : '');
+    else setStatus(errors.length ? `Brand results unavailable: ${errors.join(' ')}` : '');
     if (empty && hasServer) setPhotoFor('');
     setBusy(false);
   };
@@ -314,25 +329,44 @@ export default function AddFood() {
           />
         )}
 
-        {results.length > 0 && (
+        {results && results.saved.length > 0 && (
           <Card>
-            <H>Results</H>
-            {results.map((f) => <FoodRow key={f.id} food={f} onPress={() => pick(f)} />)}
+            <H>Your foods</H>
+            {results.saved.map((f) => <FoodRow key={f.id} food={f} times={logged.get(f.id)} onPress={() => pick(f)} />)}
+          </Card>
+        )}
+        {results && results.common.length > 0 && (
+          <Card>
+            <H>Common foods</H>
+            {results.common.map((f) => <FoodRow key={f.id} food={f} onPress={() => pick(f)} />)}
+          </Card>
+        )}
+        {results && results.online.length > 0 && (
+          <Card>
+            <H>Brands</H>
+            {results.online.map((f) => <FoodRow key={f.id} food={f} onPress={() => pick(f)} />)}
           </Card>
         )}
 
         <Card>
           <View style={styles.row}>
-            <H>Recent & custom</H>
+            <H>Your foods</H>
             <View style={{ flexDirection: 'row' }}>
               {hasServer && <Button kind="ghost" title="📷 Photo" onPress={() => setPhotoFor('')} />}
               <Button kind="ghost" title="+ Custom" onPress={() => { setAiEst(null); setCustomFor(''); }} />
             </View>
           </View>
-          {db.foods.length === 0 ? (
-            <T muted>Foods you add will show up here for quick re-logging.</T>
+          {yourFoods.length === 0 ? (
+            <T muted>Every food you log is saved here, most-used first, for one-tap re-logging.</T>
           ) : (
-            db.foods.map((f) => <FoodRow key={f.id} food={f} onPress={() => pick(f)} />)
+            <>
+              {(showAll ? yourFoods : yourFoods.slice(0, 15)).map((f) => (
+                <FoodRow key={f.id} food={f} times={logged.get(f.id)} onPress={() => pick(f)} />
+              ))}
+              {yourFoods.length > 15 && (
+                <Button kind="ghost" title={showAll ? 'Show fewer' : `Show all ${yourFoods.length}`} onPress={() => setShowAll(!showAll)} style={{ alignSelf: 'flex-start' }} />
+              )}
+            </>
           )}
         </Card>
       </ScrollView>

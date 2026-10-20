@@ -686,6 +686,7 @@ fn CustomFoodForm(
             carbs: per100(carbs),
             fat: per100(fat),
             serving_g: Some(sg),
+            serving_label: None,
             custom: true,
         };
         c.db.update(|db| db.remember(&food));

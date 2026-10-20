@@ -1,6 +1,7 @@
 // Coach's local index: your log, organised on the phone so any AI model can
 // look things up with tools instead of being sent everything at once.
 // Nothing here talks to the network; the AI only sees what a tool returns.
+import { searchBuiltIn } from './foodDb';
 import { Db, Entry, LoggedSet, dateString, foodTitle, macrosFor } from './model';
 import { e1rm, fmtSet, records, sameExercise, upNext } from './workout';
 import type { Activity } from './coach';
@@ -45,7 +46,7 @@ export const COACH_TOOLS: CoachTool[] = [
   },
   {
     name: 'search_foods',
-    description: 'Find foods by name in saved foods and the log. Shows nutrition per 100 g and per serving, and how often and when each was eaten.',
+    description: "Find foods by name: the user's saved and logged foods (with how often and when eaten), plus matching common foods from the built-in USDA database. Nutrition is per 100 g.",
     parameters: obj({ query: { type: 'string', description: 'Words in the food name or brand' } }, ['query']),
   },
   {
@@ -209,7 +210,16 @@ export class CoachIndex {
     };
     this.db.foods.forEach((f) => consider(f));
     this.db.entries.forEach((e) => consider(e.food, e.date));
-    return [...hits.values()].sort((a, b) => b.times_logged - a.times_logged).slice(0, 15);
+    const mine = [...hits.values()].sort((a, b) => b.times_logged - a.times_logged).slice(0, 15);
+    // Plus matches from the built-in USDA database, for foods not logged yet.
+    const common = searchBuiltIn(words.join(' '), 8)
+      .filter((f) => !hits.has(f.id))
+      .map((f) => ({
+        title: f.name,
+        per100: { kcal: r(f.kcal), protein_g: r1(f.protein), carbs_g: r1(f.carbs), fat_g: r1(f.fat) },
+        serving: f.serving_g ? `${f.serving_label ?? 'serving'} = ${f.serving_g} g` : null,
+      }));
+    return { your_foods: mine, usda_common_foods: common };
   }
 
   t_list_exercises() {

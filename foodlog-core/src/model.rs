@@ -19,6 +19,9 @@ pub struct Food {
     /// Grams in one serving, if the label says.
     #[serde(default)]
     pub serving_g: Option<f64>,
+    /// What one serving is, e.g. "1 breast" or "1 cup, chopped".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub serving_label: Option<String>,
     /// Entered by hand (kept forever in the saved foods list).
     #[serde(default)]
     pub custom: bool,
@@ -208,16 +211,8 @@ impl Db {
     /// Put a food at the front of the saved list (replacing any copy with the same id).
     pub fn remember(&mut self, food: &Food) {
         self.foods.retain(|f| f.id != food.id);
+        // Every food you log is kept, so it's instant next time.
         self.foods.insert(0, food.clone());
-        // Keep custom foods forever, but only the 50 most recent scanned ones.
-        let mut scanned = 0;
-        self.foods.retain(|f| {
-            if f.custom {
-                return true;
-            }
-            scanned += 1;
-            scanned <= 50
-        });
     }
 
     pub fn remove_entry(&mut self, id: u64) {

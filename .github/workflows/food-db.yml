@@ -1,0 +1,44 @@
+# Rebuild the app's built-in food database (foodlog-mobile/assets/foods/usda.json)
+# from the latest USDA FoodData Central downloads, and commit it to the branch.
+name: Build food database
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download USDA Foundation Foods and SR Legacy
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/usda && cd /tmp/usda
+          curl -fsSL https://fdc.nal.usda.gov/download-datasets -o page.html
+          # Newest Foundation Foods CSV (the file name has the release date in it).
+          FOUNDATION=$(grep -o 'fdc-datasets/FoodData_Central_foundation_food_csv_[0-9-]*\.zip' page.html | sort -u | tail -1)
+          LEGACY=$(grep -o 'fdc-datasets/FoodData_Central_sr_legacy_food_csv_[0-9-]*\.zip' page.html | sort -u | tail -1)
+          echo "Foundation: $FOUNDATION"; echo "SR Legacy: $LEGACY"
+          test -n "$FOUNDATION" && test -n "$LEGACY"
+          curl -fsSL "https://fdc.nal.usda.gov/$FOUNDATION" -o foundation.zip
+          curl -fsSL "https://fdc.nal.usda.gov/$LEGACY" -o legacy.zip
+          unzip -q foundation.zip -d foundation
+          unzip -q legacy.zip -d legacy
+          echo "FOUNDATION_DIR=$(dirname "$(find /tmp/usda/foundation -name food.csv | head -1)")" >> "$GITHUB_ENV"
+          echo "LEGACY_DIR=$(dirname "$(find /tmp/usda/legacy -name food.csv | head -1)")" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: python3 foodlog-mobile/scripts/build-food-db.py "$FOUNDATION_DIR" "$LEGACY_DIR"
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add foodlog-mobile/assets/foods/usda.json
+          if git diff --cached --quiet; then echo "No change"; exit 0; fi
+          git commit -m "Update built-in food database from USDA FoodData Central"
+          git push

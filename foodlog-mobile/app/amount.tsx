@@ -58,7 +58,7 @@ export default function Amount() {
             setAmount(u === 'serving' ? '1' : String(Math.round(serving)));
           }}
           options={[
-            { value: 'serving', label: `servings (${Math.round(serving)} g)` },
+            { value: 'serving', label: `× ${picked.serving_label || 'serving'} (${Math.round(serving)} g)` },
             { value: 'g', label: 'grams' },
           ]}
         />

@@ -65,6 +65,7 @@ pub fn parse_food(f: &Value) -> Option<Food> {
         carbs: nutrient(f, &["205"]).unwrap_or(0.0),
         fat: nutrient(f, &["204"]).unwrap_or(0.0),
         serving_g,
+        serving_label: None,
         custom: false,
     })
 }

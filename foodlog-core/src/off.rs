@@ -51,6 +51,7 @@ pub fn parse_product(p: &Value, fallback_code: &str) -> Option<Food> {
         carbs: get("carbohydrates").unwrap_or(0.0),
         fat: get("fat").unwrap_or(0.0),
         serving_g,
+        serving_label: None,
         custom: false,
     })
 }

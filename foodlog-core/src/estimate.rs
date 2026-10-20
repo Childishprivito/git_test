@@ -61,6 +61,7 @@ impl Estimate {
             carbs: per100(self.carbs_g),
             fat: per100(self.fat_g),
             serving_g: Some(g),
+            serving_label: None,
             custom: true,
         }
     }

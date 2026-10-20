@@ -14,6 +14,8 @@ export interface Food {
   carbs: number;
   fat: number;
   serving_g: number | null;
+  /** What one serving is, e.g. "1 breast" or "1 cup, chopped". */
+  serving_label?: string;
   custom: boolean;
 }
 
@@ -176,11 +178,16 @@ export function mealForHour(h: number): Meal {
   return 'Snacks';
 }
 
-/** Put a food at the front of the saved list; keep custom foods and the 50 newest others. */
+/** Put a food at the front of the saved list. Every food you log is kept, so it's instant next time. */
 export function remember(db: Db, food: Food): Db {
-  let scanned = 0;
-  const foods = [food, ...db.foods.filter((f) => f.id !== food.id)].filter((f) => f.custom || ++scanned <= 50);
-  return { ...db, foods };
+  return { ...db, foods: [food, ...db.foods.filter((f) => f.id !== food.id)] };
+}
+
+/** How many times each food has been logged, by food id. */
+export function timesLogged(db: Db): Map<string, number> {
+  const n = new Map<string, number>();
+  for (const e of db.entries) n.set(e.food.id, (n.get(e.food.id) ?? 0) + 1);
+  return n;
 }
 
 function union(a: number[], b: number[]): number[] {
