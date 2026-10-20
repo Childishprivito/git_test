@@ -43,12 +43,16 @@ Expo-side workflow: `foodlog-mobile/.eas/workflows/publish-preview.yml` (EAS Upd
   "FoodLog server" workflow; put the workers.dev URL + password in app Settings › Sync & AI.
 - **Apple Health on device — TODO**: needs Apple Developer Program ($99/yr); then EAS build → TestFlight
   (`mobile.yml` dispatch with build_ios, or eas.json production profile).
-- **Coach (AI tab) — in progress**: mobile tabs are Diary · Coach · Workout · Settings; Add food is a pushed
-  screen (`app/add.tsx`) opened from the Diary's "+ Add food" button. `lib/coach.ts` builds the text snapshot
-  (goals, 7 days of meals, program up next, recent sets, PRs, Health activity); today the tab only shares it.
+- **Coach (AI tab)**: tabs are Diary · Coach · Workout · Settings; Add food is a pushed screen (`app/add.tsx`)
+  opened from the Diary's "+ Add food" button. Coach is provider-agnostic (`lib/ai.ts`): Claude via the official
+  `@anthropic-ai/sdk` (claude-opus-5-5, effort low, `fallbacks: "default"`), and one OpenAI-compatible adapter for
+  OpenRouter (sign-in via OAuth PKCE + paste key), OpenAI, Gemini, and local/custom servers (Ollama). Keys in
+  expo-secure-store. The "local index" is `lib/coachIndex.ts`: 8 tools over the on-phone log (overview, meals,
+  nutrition trends, food search, exercises, exercise history, workouts, program day); the AI calls them as needed.
+  Untested on device: OpenRouter sign-in redirect from Expo Go (exp:// callback) — paste-a-key is the fallback.
   Login research (Oct 2026): Claude subscription login in third-party apps is NOT allowed (API key only);
-  OpenAI "Sign in with ChatGPT" (DevDay Sep 2026) allows plan usage for open-source/personal apps, others waitlist.
-  Other route: expose the data as an MCP server on the worker → add as a custom connector in Claude/ChatGPT apps.
+  OpenAI "Sign in with ChatGPT" (Sep 2026) allows plan usage for open-source/personal apps — not built yet.
+  Future: a paid house agent; an MCP server on the worker so Claude/ChatGPT apps can use the data.
 
 ## Decisions & constraints
 - User's PPL spreadsheet is **copyrighted (Jeff Nippard)** — never commit it or its contents; it is imported

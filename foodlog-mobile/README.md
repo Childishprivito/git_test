@@ -49,7 +49,10 @@ npx expo lint           # lint
 | --- | --- |
 | `app/(tabs)/index.tsx` | Diary: totals, goals, meals, Apple Health activity |
 | `app/add.tsx` | Add food (opened from the Diary): scan, barcode, search, photo search, custom foods |
-| `app/(tabs)/coach.tsx`, `lib/coach.ts` | Coach tab: AI coach snapshot of meals, workouts, PRs and Apple Health |
+| `app/(tabs)/coach.tsx` | Coach tab: chat with an AI coach (any provider) |
+| `lib/ai.ts` | Coach's AI connection: Claude (Anthropic SDK) and OpenAI-compatible providers (OpenRouter, OpenAI, Gemini, local) |
+| `lib/coachIndex.ts` | Coach's local index: lookup tools over the on-phone log |
+| `lib/coach.ts` | Plain-text snapshot for sharing to another AI app |
 | `app/(tabs)/workout.tsx` | Program import, up next, weeks, quick log, PRs |
 | `app/session.tsx` | A workout day: last time, PRs, logging sets |
 | `app/(tabs)/settings.tsx` | Goals, server, Apple Health |
