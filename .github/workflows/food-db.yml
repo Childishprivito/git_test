@@ -4,6 +4,11 @@ name: Build food database
 
 on:
   workflow_dispatch:
+  # Also run when the builder changes (works on any branch).
+  push:
+    paths:
+      - foodlog-mobile/scripts/build-food-db.py
+      - .github/workflows/food-db.yml
 
 permissions:
   contents: write
