@@ -8,15 +8,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
+import { askApple } from './appleAi';
 import { COACH_TOOLS, CoachIndex } from './coachIndex';
 import { loggedFetch } from './log';
 
-export type ProviderId = 'anthropic' | 'openai' | 'google' | 'custom';
+export type ProviderId = 'apple' | 'anthropic' | 'openai' | 'google' | 'custom';
 
 export interface Provider {
   id: ProviderId;
   name: string;
-  kind: 'anthropic' | 'openai-compatible';
+  kind: 'apple' | 'anthropic' | 'openai-compatible';
   baseUrl: string;
   defaultModel: string;
   keyHelp: string;
@@ -24,6 +25,16 @@ export interface Provider {
 }
 
 export const PROVIDERS: Provider[] = [
+  {
+    id: 'apple',
+    name: 'Apple on-device (free, private)',
+    kind: 'apple',
+    baseUrl: '',
+    defaultModel: 'Apple Intelligence',
+    keyHelp:
+      'Runs on your iPhone: free, works offline, nothing leaves the phone. Needs an iPhone 15 Pro or newer with Apple Intelligence on, and the installed app (not Expo Go). Smaller than the others: best for quick questions.',
+    keyOptional: true,
+  },
   {
     id: 'anthropic',
     name: 'Claude',
@@ -131,6 +142,7 @@ export async function askCoach(
 ): Promise<ChatTurn> {
   const p = providerOf(ai.config.provider);
   const model = ai.config.model.trim() || p.defaultModel;
+  if (p.kind === 'apple') return askApple(history, index, systemPrompt(today));
   return p.kind === 'anthropic'
     ? askClaude(ai.key, model, history, index, today)
     : askOpenAiCompatible(ai.config.baseUrl.trim() || p.baseUrl, ai.key, model, history, index, today);

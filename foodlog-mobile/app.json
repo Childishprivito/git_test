@@ -57,8 +57,8 @@
       [
         "@kingstinct/react-native-healthkit",
         {
-          "NSHealthShareUsageDescription": "FoodLog shows your steps and active calories next to what you ate.",
-          "NSHealthUpdateUsageDescription": "FoodLog saves the meals and workouts you log to Apple Health.",
+          "NSHealthShareUsageDescription": "FoodLog shows your activity, sleep, heart rate, weight and workouts on your profile and next to what you ate.",
+          "NSHealthUpdateUsageDescription": "FoodLog saves the meals, workouts and weigh-ins you log to Apple Health.",
           "background": false
         }
       ],
@@ -75,7 +75,10 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/aac44430-ef08-4e0e-baff-2f5a2affd45f"
+      "url": "https://u.expo.dev/aac44430-ef08-4e0e-baff-2f5a2affd45f",
+      "requestHeaders": {
+        "expo-channel-name": "preview"
+      }
     },
     "extra": {
       "eas": {

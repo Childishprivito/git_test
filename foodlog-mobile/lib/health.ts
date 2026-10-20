@@ -17,6 +17,8 @@ function load(): HK | null {
   // React Native reports an error thrown while a module loads as a crash,
   // so a try/catch around require() isn't enough.
   if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) return hk;
+  // Built without Apple Health (free Apple ID build).
+  if (Constants.expoConfig?.extra?.healthKit === false) return hk;
   if (TurboModuleRegistry.get('NitroModules') == null) return hk;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports

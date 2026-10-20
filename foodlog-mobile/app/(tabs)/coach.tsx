@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, Card, Field, H, T, styles, useTheme } from '@/components/ui';
 import { AiConfig, ChatTurn, PROVIDERS, ProviderId, askCoach, forgetAi, loadAi, providerOf, saveAi } from '@/lib/ai';
+import { appleAvailable } from '@/lib/appleAi';
 import { Activity, coachSnapshot } from '@/lib/coach';
 import { CoachIndex } from '@/lib/coachIndex';
 import { healthAvailable, todayActivity } from '@/lib/health';
@@ -39,6 +40,7 @@ function Connect({ current, onDone, onCancel }: { current: Ai | null; onDone: (a
 
   const save = async (k: string) => {
     if (!k.trim() && !p.keyOptional) return setError('Paste your API key first.');
+    if (p.kind === 'apple' && !appleAvailable()) return setError('Apple Intelligence isn’t available here. It needs the installed app on an iPhone 15 Pro or newer.');
     const ai = { config: { provider, model: model.trim() || p.defaultModel, baseUrl: baseUrl.trim() }, key: k.trim() };
     await saveAi(ai.config, ai.key);
     onDone(ai);
@@ -64,8 +66,16 @@ function Connect({ current, onDone, onCancel }: { current: Ai | null; onDone: (a
         ))}
         <View style={{ height: 10 }} />
         <T small muted>{p.keyHelp}</T>
-        <Field label={p.keyOptional ? 'API key (optional)' : 'API key'} value={key} onChangeText={setKey} secureTextEntry autoCapitalize="none" autoCorrect={false} placeholder={current ? 'Leave empty to keep the saved key' : ''} />
-        <Field label="Model" value={model} onChangeText={setModel} autoCapitalize="none" autoCorrect={false} />
+        {p.kind === 'apple' ? (
+          <T bold style={{ marginTop: 8, color: appleAvailable() ? t.accent : t.danger }}>
+            {appleAvailable() ? '✓ Apple Intelligence is ready on this phone' : 'Not available here (Expo Go, web, or a phone without Apple Intelligence)'}
+          </T>
+        ) : (
+          <>
+            <Field label={p.keyOptional ? 'API key (optional)' : 'API key'} value={key} onChangeText={setKey} secureTextEntry autoCapitalize="none" autoCorrect={false} placeholder={current ? 'Leave empty to keep the saved key' : ''} />
+            <Field label="Model" value={model} onChangeText={setModel} autoCapitalize="none" autoCorrect={false} />
+          </>
+        )}
         {p.kind === 'openai-compatible' && (
           <Field label="Server address" value={baseUrl} onChangeText={setBaseUrl} autoCapitalize="none" autoCorrect={false} keyboardType="url" />
         )}

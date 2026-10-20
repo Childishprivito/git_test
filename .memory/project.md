@@ -43,6 +43,13 @@ Expo-side workflow: `foodlog-mobile/.eas/workflows/publish-preview.yml` (EAS Upd
   "FoodLog server" workflow; put the workers.dev URL + password in app Settings › Sync & AI.
 - **Apple Health on device — TODO**: needs Apple Developer Program ($99/yr); then EAS build → TestFlight
   (`mobile.yml` dispatch with build_ios, or eas.json production profile).
+- **Apple on-device AI + free Mac build** (Oct 2026): Coach provider `apple` (`lib/appleAi.ts`) via
+  `@react-native-ai/apple` 0.12 + `ai` 6 (AI SDK v6; Apple runs tools natively, providerExecuted). Guarded like
+  health.ts (checks TurboModule `NativeAppleLLM` before require) so Expo Go/web are safe. Needs a dev/real build:
+  `IPHONE_BUILD.md` = free Apple ID route (Xcode on the user's MacBook, `npm run ios:device:free`, 7-day expiry;
+  `FOODLOG_NO_HEALTHKIT=1` via `app.config.js` drops the HealthKit entitlement). Local builds pull OTA updates from
+  channel `preview` (`updates.requestHeaders`). Untested on device. Siri App Intents: not built yet (needs native
+  Swift + likely the paid account).
 - **Food data** (Oct 2026): search = your foods (all kept, most-logged first) → built-in USDA DB
   (`lib/foodDb.ts`, `assets/foods/usda.json`, ~8k Foundation + SR Legacy foods, offline) → Open Food Facts brands.
   Barcodes: saved → OFF → USDA via server. The JSON is built by `foodlog-mobile/scripts/build-food-db.py`; the
