@@ -57,6 +57,7 @@ npx expo lint           # lint
 | `app/session.tsx` | A workout day: last time, PRs, logging sets |
 | `app/(tabs)/profile.tsx` | Profile: weight trend, body stats, Apple Health, nutrition and training overview, your details |
 | `lib/appleAi.ts` | Coach provider: Apple's on-device model (Apple Intelligence), via `@react-native-ai/apple` |
+| `TESTFLIGHT.md`, `.eas/workflows/testflight.yml` | Paid route: build in the cloud and install via TestFlight |
 | `IPHONE_BUILD.md`, `app.config.js` | Free build onto your iPhone from a Mac (`npm run ios:device:free`) |
 | `lib/foodDb.ts`, `assets/foods/usda.json` | Built-in USDA food database (offline search); rebuild with `scripts/build-food-db.py` or the "Build food database" workflow |
 | `app/logs.tsx`, `lib/log.ts` | App log: crashes, errors and network requests; Settings › Logs to view or share |

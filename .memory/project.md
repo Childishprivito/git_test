@@ -43,6 +43,10 @@ Expo-side workflow: `foodlog-mobile/.eas/workflows/publish-preview.yml` (EAS Upd
   "FoodLog server" workflow; put the workers.dev URL + password in app Settings › Sync & AI.
 - **Apple Health on device — TODO**: needs Apple Developer Program ($99/yr); then EAS build → TestFlight
   (`mobile.yml` dispatch with build_ios, or eas.json production profile).
+- **TestFlight (paid route, chosen by the user Oct 20)**: `foodlog-mobile/TESTFLIGHT.md`; EAS workflow
+  `.eas/workflows/testflight.yml` (build production + submit), run from expo.dev. Builds use channel `preview`
+  (eas.json) so master's OTA updates reach them. User must: enroll ($99), make an ASC API key, upload it on
+  expo.dev Credentials. Then: Apple Health, Apple on-device AI, Siri App Intents become possible.
 - **Apple on-device AI + free Mac build** (Oct 2026): Coach provider `apple` (`lib/appleAi.ts`) via
   `@react-native-ai/apple` 0.12 + `ai` 6 (AI SDK v6; Apple runs tools natively, providerExecuted). Guarded like
   health.ts (checks TurboModule `NativeAppleLLM` before require) so Expo Go/web are safe. Needs a dev/real build:

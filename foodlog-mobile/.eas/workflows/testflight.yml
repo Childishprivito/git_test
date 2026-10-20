@@ -1,0 +1,23 @@
+# Builds the real iPhone app on Expo's servers and sends it to TestFlight.
+# Start it from expo.dev › projectfitness › Workflows › "TestFlight" › Run.
+# Needs the Apple Developer account and an App Store Connect API key
+# uploaded on expo.dev (see TESTFLIGHT.md).
+name: TestFlight
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build_ios:
+    name: Build iPhone app
+    type: build
+    params:
+      platform: ios
+      profile: production
+
+  submit_ios:
+    name: Send to TestFlight
+    needs: [build_ios]
+    type: submit
+    params:
+      build_id: ${{ needs.build_ios.outputs.build_id }}
