@@ -43,6 +43,12 @@ Expo-side workflow: `foodlog-mobile/.eas/workflows/publish-preview.yml` (EAS Upd
   "FoodLog server" workflow; put the workers.dev URL + password in app Settings › Sync & AI.
 - **Apple Health on device — TODO**: needs Apple Developer Program ($99/yr); then EAS build → TestFlight
   (`mobile.yml` dispatch with build_ios, or eas.json production profile).
+- **Food data** (Oct 2026): search = your foods (all kept, most-logged first) → built-in USDA DB
+  (`lib/foodDb.ts`, `assets/foods/usda.json`, ~8k Foundation + SR Legacy foods, offline) → Open Food Facts brands.
+  Barcodes: saved → OFF → USDA via server. The JSON is built by `foodlog-mobile/scripts/build-food-db.py`; the
+  sandbox can't reach fdc.nal.usda.gov, so the "Build food database" workflow (`food-db.yml`) downloads and
+  commits it (runs on push of the script/workflow, or dispatch once on master). Food has optional `serving_label`.
+  Next step (needs Cloudflare): branded USDA + OFF US subset in D1 on the worker.
 - **Logging** (`lib/log.ts`): on-phone log (last 500 lines, AsyncStorage) of crashes (ErrorUtils + error
   boundary), unhandled promise errors, console errors/warnings, and every request via `loggedFetch()` (timeouts,
   status, ms; secrets stripped). Viewed/shared at Settings › Logs (`app/logs.tsx`). To debug a user report: ask

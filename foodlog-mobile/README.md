@@ -56,6 +56,7 @@ npx expo lint           # lint
 | `app/(tabs)/workout.tsx` | Program import, up next, weeks, quick log, PRs |
 | `app/session.tsx` | A workout day: last time, PRs, logging sets |
 | `app/(tabs)/profile.tsx` | Profile: weight trend, body stats, Apple Health, nutrition and training overview, your details |
+| `lib/foodDb.ts`, `assets/foods/usda.json` | Built-in USDA food database (offline search); rebuild with `scripts/build-food-db.py` or the "Build food database" workflow |
 | `app/logs.tsx`, `lib/log.ts` | App log: crashes, errors and network requests; Settings › Logs to view or share |
 | `app/settings.tsx` | Settings (opened from Profile): goals, server, Apple Health |
 | `components/WeightChart.tsx`, `lib/weight.ts` | Weight chart and 7-day average |

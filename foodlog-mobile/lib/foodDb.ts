@@ -33,13 +33,53 @@ function stem(w: string): string {
 
 const tokenize = (s: string) => norm(s).split(' ').filter(Boolean).map(stem);
 
+// Everyday words that USDA names differently.
+const SYNONYMS: Record<string, string> = {
+  oatmeal: 'oats',
+  oatmeals: 'oats',
+  hamburger: 'beef ground',
+  steak: 'beef steak',
+  'peanut butter': 'peanut butter',
+  oj: 'orange juice',
+  pb: 'peanut butter',
+  fries: 'french fried potatoes',
+  chickpea: 'chickpeas garbanzo',
+  garbanzo: 'chickpeas garbanzo',
+  shrimp: 'crustaceans shrimp',
+  crab: 'crustaceans crab',
+  tuna: 'fish tuna',
+  cod: 'fish cod',
+  tilapia: 'fish tilapia',
+};
+
+// Plain, everyday forms rank up; processed or unusual forms rank down
+// (unless the search asks for them).
+const PLAIN = new Set(['raw', 'whole', 'cooked', 'roasted', 'boiled', 'baked', 'grilled', 'fresh', 'plain', 'regular', 'broiler', 'fryer', 'lean']);
+const UNUSUAL = new Set([
+  'roll', 'sliced', 'deli', 'mix', 'dry', 'dried', 'flavor', 'flavored', 'mesquite', 'babyfood', 'imitation', 'substitute',
+  'sheep', 'goat', 'human', 'buffalo', 'yolk', 'canned', 'frozen', 'dehydrated', 'powder', 'concentrate', 'prepared',
+  'industrial', 'commercial', 'school', 'lunch', 'fat-free', 'free', 'low', 'sodium', 'reduced', 'imported', 'alaska', 'native',
+  'overripe', 'leaves', 'variety', 'organ', 'giblet', 'liver', 'heart', 'cereal', 'loaf', 'nugget', 'tender', 'breaded',
+  'microwaved', 'heated', 'unheated', 'purchased', 'buttermilk', 'stick', 'battered', 'fast', 'food', 'restaurant', 'snack',
+  'fruit', 'glutinous',
+]);
+// USDA files some foods under a category ("Nuts, almonds", "Fish, salmon, ...").
+// For those, the food's own name is the second part.
+const CATEGORY = new Set(['nut', 'fish', 'cheese', 'spice', 'cereal', 'crustacean', 'mollusk', 'seed', 'beverage', 'game', 'lamb', 'pork', 'veal', 'beef', 'turkey', 'chicken', 'bean', 'pea', 'lentil', 'squash', 'cabbage', 'lettuce', 'pepper', 'onion', 'tomato']);
+
+function head(name: string): string[] {
+  const parts = name.split(',');
+  const first = tokenize(parts[0]);
+  return first.length === 1 && CATEGORY.has(first[0]) && parts[1] ? [...first, ...tokenize(parts[1])] : first;
+}
+
 function load(): Indexed[] {
   if (index) return index;
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const data = require('../assets/foods/usda.json') as { foods: Row[] };
   index = data.foods.map((row) => {
     const name = row[1];
-    return { row, tokens: tokenize(name), head: tokenize(name.split(',')[0]) };
+    return { row, tokens: tokenize(name), head: head(name) };
   });
   return index;
 }
@@ -67,7 +107,8 @@ export function toFood(row: Row): Food {
  * shorter, simpler names beat long specific ones.
  */
 export function searchBuiltIn(query: string, limit = 25): Food[] {
-  const words = tokenize(query);
+  const q = norm(query);
+  const words = tokenize(SYNONYMS[q] ?? q.split(' ').map((w) => SYNONYMS[w] ?? w).join(' '));
   if (!words.length) return [];
   const scored: { item: Indexed; score: number }[] = [];
   for (const item of load()) {
@@ -80,16 +121,33 @@ export function searchBuiltIn(query: string, limit = 25): Food[] {
         break;
       }
       score += exact ? 10 : 6;
-      if (item.head.includes(w)) score += 12;
-      else if (item.head.some((t) => t.startsWith(w))) score += 6;
+      if (item.head.some((t) => t === w || t.startsWith(w))) score += 6;
     }
     if (!ok) continue;
+    // Extra words in the main name mean a more specific product ("Chicken breast tenders").
+    score -= item.head.filter((t) => !CATEGORY.has(t) && !words.some((w) => t.startsWith(w))).length * 4;
     // Prefer simple names and everyday forms.
-    score -= item.tokens.length * 0.8;
-    if (item.tokens.includes('raw')) score += 2;
-    if (item.head.length === words.length && words.every((w) => item.head.includes(w))) score += 8;
+    score -= item.tokens.length * 0.3;
+    let plain = false;
+    for (const t of item.tokens) {
+      if (words.includes(t)) continue;
+      if (PLAIN.has(t)) plain = true;
+      else if (UNUSUAL.has(t)) score -= 5;
+    }
+    if (plain) score += 2;
+    if (item.tokens.includes('whole') && !words.includes('whole')) score += 1;
     scored.push({ item, score });
   }
   scored.sort((a, b) => b.score - a.score || a.item.row[1].length - b.item.row[1].length);
-  return scored.slice(0, limit).map((s) => toFood(s.item.row));
+  // Some foods appear more than once (different samples); show each name once.
+  const seen = new Set<string>();
+  const out: Food[] = [];
+  for (const s of scored) {
+    const key = s.item.row[1].toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(toFood(s.item.row));
+    if (out.length >= limit) break;
+  }
+  return out;
 }
