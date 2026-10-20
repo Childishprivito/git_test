@@ -1,4 +1,5 @@
 // Settings: goals, server (sync + AI), Apple Health.
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -88,6 +89,12 @@ export default function Settings() {
               }}
             />
           </View>
+        </Card>
+
+        <Card>
+          <H>Logs</H>
+          <T small muted>See what the app did and what went wrong (searches, sync, AI, crashes). Share them to get help with a problem.</T>
+          <Button title="View logs" onPress={() => router.push('/logs')} style={{ marginTop: 10, alignSelf: 'flex-start' }} />
         </Card>
 
         <T small muted style={{ textAlign: 'center', marginTop: 12 }}>

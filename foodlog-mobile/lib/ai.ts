@@ -9,6 +9,7 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 import { COACH_TOOLS, CoachIndex } from './coachIndex';
+import { loggedFetch } from './log';
 
 export type ProviderId = 'anthropic' | 'openai' | 'google' | 'custom';
 
@@ -137,7 +138,13 @@ export async function askCoach(
 
 async function askClaude(apiKey: string, model: string, history: ChatTurn[], index: CoachIndex, today: string): Promise<ChatTurn> {
   // Running in the app with the user's own key, so browser-style use is expected.
-  const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
+  const client = new Anthropic({
+    apiKey,
+    dangerouslyAllowBrowser: true,
+    // Route through the app log so failures show up in Settings › Logs.
+    fetch: ((url: string | URL | Request, init?: RequestInit) =>
+      loggedFetch('coach', typeof url === 'string' ? url : url instanceof URL ? url.href : url.url, { ...init, timeoutMs: 180000 })) as typeof fetch,
+  });
   const tools: Anthropic.Beta.BetaTool[] = COACH_TOOLS.map((t) => ({
     name: t.name,
     description: t.description,
@@ -202,7 +209,8 @@ async function askOpenAiCompatible(
   if (key) headers.authorization = `Bearer ${key}`;
   const looked: string[] = [];
   for (let round = 0; round < MAX_ROUNDS; round++) {
-    const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/chat/completions`, {
+    const res = await loggedFetch('coach', `${baseUrl.replace(/\/+$/, '')}/chat/completions`, {
+      timeoutMs: 180000,
       method: 'POST',
       headers,
       body: JSON.stringify({ model, messages, tools }),

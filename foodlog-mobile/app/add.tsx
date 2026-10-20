@@ -10,6 +10,7 @@ import { Button, Card, Field, H, Segmented, T, styles, useTheme } from '@/compon
 import { Food, MEALS, Meal, foodTitle, remember } from '@/lib/model';
 import * as off from '@/lib/off';
 import { Estimate, estimate, loadConfig, usda } from '@/lib/server';
+import { error as logError, info, warn } from '@/lib/log';
 import { useStore } from '@/lib/store';
 
 function FoodRow({ food, onPress }: { food: Food; onPress: () => void }) {
@@ -128,6 +129,7 @@ function PhotoSearch({ barcode, onUseEstimate }: { barcode: string; onUseEstimat
       }
       setEst(e);
     } catch (err) {
+      logError('photo', 'Photo search failed', err);
       setError((err as Error).message);
     } finally {
       setStep('');
@@ -209,6 +211,7 @@ export default function AddFood() {
         setCustomFor(code);
       }
     } catch (e) {
+      logError('barcode', `Lookup of ${code} failed`, e);
       setStatus((e as Error).message);
     } finally {
       setBusy(false);
@@ -228,24 +231,38 @@ export default function AddFood() {
     return () => onScan(null);
   }, [onScan]);
 
+  // Each search gets a number; results from an older, slower search are ignored.
+  const searchSeq = useRef(0);
   const runSearch = async () => {
     const q = query.trim();
     if (!q) return;
-    const ql = q.toLowerCase();
-    let found = db.foods.filter((f) => foodTitle(f).toLowerCase().includes(ql));
+    const seq = ++searchSeq.current;
+    const stale = () => seq !== searchSeq.current;
+    const words = q.toLowerCase().split(/\s+/);
+    let found = db.foods.filter((f) => words.every((w) => foodTitle(f).toLowerCase().includes(w)));
     setResults(found);
     setPhotoFor(null);
+    setCustomFor(null);
     setBusy(true);
     setStatus('Searching…');
-    let error = '';
+    info('search', `Searching "${q}" (${found.length} saved matches)`);
+    const errors: string[] = [];
     const add = (more: Food[]) => {
+      if (stale()) return;
       for (const f of more) if (!found.some((x) => x.id === f.id)) found = [...found, f];
       setResults(found);
     };
-    if (hasServer) await usda(q).then(add).catch((e: Error) => (error = e.message));
-    await off.search(q).then(add).catch((e: Error) => (error ||= e.message));
+    // Both sources at once; one failing doesn't stop the other.
+    await Promise.all([
+      hasServer ? usda(q).then(add).catch((e: Error) => errors.push(`USDA: ${e.message}`)) : null,
+      off.search(q).then(add).catch((e: Error) => errors.push(e.message)),
+    ]);
+    if (stale()) return;
+    if (errors.length) warn('search', `"${q}" finished with problems`, errors);
     const empty = found.length === 0;
-    setStatus(empty ? error || (hasServer ? 'No matches. Snap the package (or your plate) and AI will find it.' : 'No matches. Try fewer words, or add a custom food.') : '');
+    if (empty && errors.length) setStatus(errors.join(' '));
+    else if (empty) setStatus(hasServer ? 'No matches. Snap the package (or your plate) and AI will find it.' : 'No matches. Try fewer words, or add a custom food.');
+    else setStatus(errors.length ? `Some results may be missing. ${errors.join(' ')}` : '');
     if (empty && hasServer) setPhotoFor('');
     setBusy(false);
   };
@@ -266,7 +283,7 @@ export default function AddFood() {
         <Card>
           <View style={[styles.row, { alignItems: 'flex-end' }]}>
             <Field label="Search foods" value={query} onChangeText={setQuery} placeholder="e.g. greek yogurt" returnKeyType="search" onSubmitEditing={runSearch} />
-            <Button title="Search" onPress={runSearch} disabled={busy} />
+            <Button title="Search" onPress={runSearch} />
           </View>
         </Card>
         {!!status && <T muted style={{ marginBottom: 10 }} >{status}</T>}

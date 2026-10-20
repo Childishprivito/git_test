@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { Db, emptyDb, Food, Meal, mealForHour, mergeDb, normalizeDb } from './model';
+import { error as logError, warn as logWarn } from './log';
 import { loadConfig, sync } from './server';
 
 const KEY = 'foodlog.v1';
@@ -70,6 +71,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setDb((now) => (now === sent ? merged : mergeDb(now, merged)));
       setSyncStatus('Synced');
     } catch (e) {
+      logWarn('sync', 'Sync failed', e);
       setSyncStatus(`Not synced: ${(e as Error).message}`);
     }
   }, []);
@@ -86,7 +88,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!ready) return;
     const json = JSON.stringify(db);
-    AsyncStorage.setItem(KEY, json).catch(() => {});
+    AsyncStorage.setItem(KEY, json).catch((e) => logError('storage', 'Could not save the log', e));
     if (json === lastSynced.current) return;
     clearTimeout(timer.current);
     timer.current = setTimeout(runSync, 1200);

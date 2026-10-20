@@ -11,6 +11,7 @@ import { Activity, coachSnapshot } from '@/lib/coach';
 import { CoachIndex } from '@/lib/coachIndex';
 import { healthAvailable, todayActivity } from '@/lib/health';
 import { dateString } from '@/lib/model';
+import { error as logError } from '@/lib/log';
 import { useStore } from '@/lib/store';
 
 const CHAT = 'foodlog.coach.chat';
@@ -134,6 +135,7 @@ export default function Coach() {
       const reply = await askCoach(ai, next.slice(-12), index, dateString(0));
       keep([...next, reply]);
     } catch (e) {
+      logError('coach', 'Coach could not answer', e);
       setError((e as Error).message);
     } finally {
       setThinking(false);

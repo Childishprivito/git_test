@@ -1,5 +1,6 @@
 // Your FoodLog server (foodlog-worker/): sync, USDA search, AI photo search.
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { TimeoutError, error as logError, loggedFetch } from './log';
 import type { Db, Food } from './model';
 
 const KEY = 'foodlog.server';
@@ -41,15 +42,20 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   if (!c) throw new Error('Set up your server in Settings first.');
   let resp: Response;
   try {
-    resp = await fetch(`${c.url.trim().replace(/\/+$/, '')}${path}`, {
+    resp = await loggedFetch(`server${path.split('?')[0]}`, `${c.url.trim().replace(/\/+$/, '')}${path}`, {
       ...init,
+      timeoutMs: path.startsWith('/estimate') ? 60000 : 20000,
       headers: { Authorization: `Bearer ${c.password}`, 'Content-Type': 'application/json' },
     });
-  } catch {
+  } catch (e) {
+    if (e instanceof TimeoutError) throw new Error('Your FoodLog server took too long to answer.');
     throw new Error("Can't reach your FoodLog server. Are you online?");
   }
   const body = await resp.json().catch(() => null);
-  if (!resp.ok) throw new Error(body?.error ?? `Server error (${resp.status}).`);
+  if (!resp.ok) {
+    logError(`server${path.split('?')[0]}`, `Server error ${resp.status}`, body);
+    throw new Error(body?.error ?? `Server error (${resp.status}).`);
+  }
   return body as T;
 }
 

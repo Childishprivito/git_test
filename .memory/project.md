@@ -43,6 +43,12 @@ Expo-side workflow: `foodlog-mobile/.eas/workflows/publish-preview.yml` (EAS Upd
   "FoodLog server" workflow; put the workers.dev URL + password in app Settings › Sync & AI.
 - **Apple Health on device — TODO**: needs Apple Developer Program ($99/yr); then EAS build → TestFlight
   (`mobile.yml` dispatch with build_ios, or eas.json production profile).
+- **Logging** (`lib/log.ts`): on-phone log (last 500 lines, AsyncStorage) of crashes (ErrorUtils + error
+  boundary), unhandled promise errors, console errors/warnings, and every request via `loggedFetch()` (timeouts,
+  status, ms; secrets stripped). Viewed/shared at Settings › Logs (`app/logs.tsx`). To debug a user report: ask
+  them to share the logs and paste them in chat.
+- **Search fixes** (`lib/off.ts`, `app/add.tsx`): User-Agent header (OFF throttles anonymous apps), 20 s
+  timeout, friendly 429/HTML/5xx errors, 10-min result cache, USDA + OFF in parallel, stale searches ignored.
 - **Profile tab** (`app/(tabs)/profile.tsx`, replaced the Settings tab; Settings is now `app/settings.tsx`, opened
   from the gear): weight log + chart (`components/WeightChart.tsx`, `lib/weight.ts`, 7-day avg), body stats
   (BMI, Mifflin-St Jeor BMR, maintenance), Apple Health tiles (`healthOverview()` in `lib/health.ts`: steps,
