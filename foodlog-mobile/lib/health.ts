@@ -1,7 +1,8 @@
 // Apple Health. Works in a development/TestFlight build of this app;
 // in Expo Go (and on web/Android) the native module isn't there, so
 // everything here quietly reports "not available".
-import { Platform } from 'react-native';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
+import { Platform, TurboModuleRegistry } from 'react-native';
 import type { Entry, LoggedSet } from './model';
 import { macrosFor } from './model';
 
@@ -12,6 +13,11 @@ function load(): HK | null {
   if (hk !== undefined) return hk;
   hk = null;
   if (Platform.OS !== 'ios') return hk;
+  // Expo Go doesn't include the native module. Check before requiring it:
+  // React Native reports an error thrown while a module loads as a crash,
+  // so a try/catch around require() isn't enough.
+  if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) return hk;
+  if (TurboModuleRegistry.get('NitroModules') == null) return hk;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const mod: HK = require('@kingstinct/react-native-healthkit');

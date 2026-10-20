@@ -56,6 +56,13 @@ Expo-side workflow: `foodlog-mobile/.eas/workflows/publish-preview.yml` (EAS Upd
 - **Stay on the Expo SDK that App Store Expo Go supports** (Expo Go 57.0.9 → SDK 57 as of 2026-10-20).
   SDK 58 was out but Expo Go showed "Project is incompatible with this version of Expo Go".
   Only move to a newer SDK once Expo Go › Settings › Supported SDK shows it (or once using a dev/TestFlight build).
+- **Never rely on try/catch around require() of a native module**: React Native's module loader
+  (`guardedLoadModule`) calls `ErrorUtils.reportFatalError` and shows a red crash screen. Check first
+  (`TurboModuleRegistry.get(...)`, `Constants.executionEnvironment === ExecutionEnvironment.StoreClient`).
+- Planned testing setup (user decided to fully invest in Expo): EXPO_TOKEN as an environment secret +
+  network access to Expo hosts → `eas workflow:runs`/`workflow:logs`, `eas update` straight from the
+  sandbox (no queue), and EAS Simulator (`eas simulator:*`, experimental remote iOS simulator with
+  agent-device/Appium automation) to drive and screenshot the app.
 - Expo Go must be signed in as a member of `daunos-team` (the project is private) or it shows HTTP 403.
 - Sandbox network blocks openfoodfacts, docs.expo.dev, api.expo.dev, *.github.io, cloudflare — test with
   Playwright route mocks; use `EXPO_OFFLINE=1` for `npx expo install/config/prebuild/lint/export`.
