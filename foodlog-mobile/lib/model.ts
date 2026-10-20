@@ -69,6 +69,23 @@ export interface LoggedSet {
   day: string;
 }
 
+/** One body weight reading. */
+export interface WeighIn {
+  id: number;
+  date: string; // YYYY-MM-DD
+  lb: number;
+}
+
+export interface Profile {
+  name: string;
+  birth_year: number | null;
+  height_in: number | null;
+  sex: '' | 'male' | 'female';
+  goal_weight_lb: number | null;
+}
+
+export const EMPTY_PROFILE: Profile = { name: '', birth_year: null, height_in: null, sex: '', goal_weight_lb: null };
+
 export interface Db {
   entries: Entry[];
   foods: Food[];
@@ -79,6 +96,10 @@ export interface Db {
   program_updated: number;
   sets: LoggedSet[];
   deleted_sets: number[];
+  weights: WeighIn[];
+  deleted_weights: number[];
+  profile: Profile;
+  profile_updated: number;
 }
 
 export interface Macros {
@@ -101,6 +122,10 @@ export function emptyDb(): Db {
     program_updated: 0,
     sets: [],
     deleted_sets: [],
+    weights: [],
+    deleted_weights: [],
+    profile: { ...EMPTY_PROFILE },
+    profile_updated: 0,
   };
 }
 
@@ -118,6 +143,10 @@ export function normalizeDb(raw: unknown): Db {
     program_updated: d.program_updated ?? 0,
     sets: (d.sets ?? []).map((s) => ({ ...s, week: s.week ?? null, day: s.day ?? '' })),
     deleted_sets: d.deleted_sets ?? [],
+    weights: d.weights ?? [],
+    deleted_weights: d.deleted_weights ?? [],
+    profile: { ...EMPTY_PROFILE, ...(d.profile ?? {}) },
+    profile_updated: d.profile_updated ?? 0,
   };
 }
 
@@ -177,7 +206,15 @@ export function mergeDb(a: Db, b: Db): Db {
   }
   sets.sort((x, y) => x.id - y.id);
 
+  const deleted_weights = union(a.deleted_weights, b.deleted_weights);
+  const weights: WeighIn[] = [];
+  for (const w of [...a.weights, ...b.weights]) {
+    if (!deleted_weights.includes(w.id) && !weights.some((x) => x.id === w.id)) weights.push(w);
+  }
+  weights.sort((x, y) => x.id - y.id);
+
   const goalsFromB = b.goals_updated > a.goals_updated;
+  const profileFromB = b.profile_updated > a.profile_updated;
   const programFromB = b.program_updated > a.program_updated;
   return {
     entries,
@@ -189,6 +226,10 @@ export function mergeDb(a: Db, b: Db): Db {
     program_updated: programFromB ? b.program_updated : a.program_updated,
     sets,
     deleted_sets,
+    weights,
+    deleted_weights,
+    profile: profileFromB ? b.profile : a.profile,
+    profile_updated: profileFromB ? b.profile_updated : a.profile_updated,
   };
 }
 

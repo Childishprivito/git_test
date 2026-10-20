@@ -28,8 +28,8 @@ export default function TabLayout() {
         options={{ title: 'Workout', tabBarIcon: icon({ ios: 'dumbbell.fill', android: 'fitness_center', web: 'fitness_center' }) }}
       />
       <Tabs.Screen
-        name="settings"
-        options={{ title: 'Settings', tabBarIcon: icon({ ios: 'gearshape.fill', android: 'settings', web: 'settings' }) }}
+        name="profile"
+        options={{ title: 'Profile', tabBarIcon: icon({ ios: 'person.crop.circle.fill', android: 'account_circle', web: 'account_circle' }) }}
       />
     </Tabs>
   );

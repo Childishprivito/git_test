@@ -43,7 +43,13 @@ Expo-side workflow: `foodlog-mobile/.eas/workflows/publish-preview.yml` (EAS Upd
   "FoodLog server" workflow; put the workers.dev URL + password in app Settings › Sync & AI.
 - **Apple Health on device — TODO**: needs Apple Developer Program ($99/yr); then EAS build → TestFlight
   (`mobile.yml` dispatch with build_ios, or eas.json production profile).
-- **Coach (AI tab)**: tabs are Diary · Coach · Workout · Settings; Add food is a pushed screen (`app/add.tsx`)
+- **Profile tab** (`app/(tabs)/profile.tsx`, replaced the Settings tab; Settings is now `app/settings.tsx`, opened
+  from the gear): weight log + chart (`components/WeightChart.tsx`, `lib/weight.ts`, 7-day avg), body stats
+  (BMI, Mifflin-St Jeor BMR, maintenance), Apple Health tiles (`healthOverview()` in `lib/health.ts`: steps,
+  active kcal, exercise min, sleep, resting HR, HRV, VO2 max, body fat, workouts), nutrition + training summary,
+  editable details. Db gained `weights`, `deleted_weights`, `profile`, `profile_updated` (Rust `foodlog-core` too,
+  so sync keeps them). Health parts untested on device (need the $99 build).
+- **Coach (AI tab)**: tabs are Diary · Coach · Workout · Profile; Add food is a pushed screen (`app/add.tsx`)
   opened from the Diary's "+ Add food" button. Coach is provider-agnostic (`lib/ai.ts`): Claude via the official
   `@anthropic-ai/sdk` (claude-opus-5-5, effort low, `fallbacks: "default"`), and one OpenAI-compatible adapter for
   OpenAI, Gemini, and local/custom servers (Ollama). OpenRouter was tried and removed at the user's request. Keys in

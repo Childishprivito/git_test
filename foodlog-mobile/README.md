@@ -55,7 +55,9 @@ npx expo lint           # lint
 | `lib/coach.ts` | Plain-text snapshot for sharing to another AI app |
 | `app/(tabs)/workout.tsx` | Program import, up next, weeks, quick log, PRs |
 | `app/session.tsx` | A workout day: last time, PRs, logging sets |
-| `app/(tabs)/settings.tsx` | Goals, server, Apple Health |
+| `app/(tabs)/profile.tsx` | Profile: weight trend, body stats, Apple Health, nutrition and training overview, your details |
+| `app/settings.tsx` | Settings (opened from Profile): goals, server, Apple Health |
+| `components/WeightChart.tsx`, `lib/weight.ts` | Weight chart and 7-day average |
 | `app/scan.tsx` / `app/amount.tsx` | Barcode scanner / "How much?" sheet |
 | `lib/model.ts` | Data format shared with the web app, merging for sync |
 | `lib/workout.ts` | PRs, last session, up next |

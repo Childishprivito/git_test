@@ -40,15 +40,13 @@ export default function Settings() {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.screen} keyboardShouldPersistTaps="handled">
-        <H level={1}>Settings</H>
-
         <Card>
           <H>Apple Health</H>
           {healthAvailable() ? (
             <View style={styles.row}>
-              <T style={{ flex: 1 }}>Send meals and workouts to Apple Health, and show today’s steps</T>
+              <T style={{ flex: 1 }}>Send meals, workouts and weigh-ins to Apple Health, and show your activity, sleep and heart data</T>
               <Switch
                 accessibilityLabel="Send to Apple Health"
                 value={health}

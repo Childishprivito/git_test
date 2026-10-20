@@ -152,6 +152,41 @@ pub struct Db {
     /// Ids of removed sets.
     #[serde(default)]
     pub deleted_sets: Vec<u64>,
+    /// Body weight log.
+    #[serde(default)]
+    pub weights: Vec<WeighIn>,
+    /// Ids of removed weigh-ins.
+    #[serde(default)]
+    pub deleted_weights: Vec<u64>,
+    /// About you (shown on the Profile page).
+    #[serde(default)]
+    pub profile: Profile,
+    #[serde(default)]
+    pub profile_updated: u64,
+}
+
+/// One body weight reading.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct WeighIn {
+    pub id: u64,
+    /// YYYY-MM-DD
+    pub date: String,
+    pub lb: f64,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Profile {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub birth_year: Option<u32>,
+    #[serde(default)]
+    pub height_in: Option<f64>,
+    /// "male", "female" or "" (used only for calorie estimates).
+    #[serde(default)]
+    pub sex: String,
+    #[serde(default)]
+    pub goal_weight_lb: Option<f64>,
 }
 
 impl Db {
@@ -257,6 +292,29 @@ impl Db {
             (self.program.clone(), self.program_updated)
         };
 
+        let mut deleted_weights = self.deleted_weights.clone();
+        for id in &other.deleted_weights {
+            if !deleted_weights.contains(id) {
+                deleted_weights.push(*id);
+            }
+        }
+        deleted_weights.sort_unstable();
+        let mut weights: Vec<WeighIn> = Vec::new();
+        for w in self.weights.iter().chain(&other.weights) {
+            if deleted_weights.binary_search(&w.id).is_err()
+                && !weights.iter().any(|x| x.id == w.id)
+            {
+                weights.push(w.clone());
+            }
+        }
+        weights.sort_by_key(|w| w.id);
+
+        let (profile, profile_updated) = if other.profile_updated > self.profile_updated {
+            (other.profile.clone(), other.profile_updated)
+        } else {
+            (self.profile.clone(), self.profile_updated)
+        };
+
         Db {
             entries,
             foods,
@@ -267,6 +325,10 @@ impl Db {
             program_updated,
             sets,
             deleted_sets,
+            weights,
+            deleted_weights,
+            profile,
+            profile_updated,
         }
     }
 
@@ -399,6 +461,40 @@ mod tests {
         let m = phone.merge(&server);
         assert_eq!(m.sets.iter().map(|s| s.id).collect::<Vec<_>>(), [1, 3]);
         assert_eq!(m.program.unwrap().name, "New");
+    }
+
+    #[test]
+    fn merge_combines_weigh_ins_and_keeps_newest_profile() {
+        let w = |id, lb| WeighIn {
+            id,
+            date: "2026-10-20".into(),
+            lb,
+        };
+        let phone = Db {
+            weights: vec![w(1, 180.0), w(2, 179.0)],
+            profile: Profile {
+                name: "New".into(),
+                ..Profile::default()
+            },
+            profile_updated: 20,
+            ..Db::default()
+        };
+        let server = Db {
+            weights: vec![w(1, 180.0), w(3, 178.5)],
+            deleted_weights: vec![2],
+            profile: Profile {
+                name: "Old".into(),
+                ..Profile::default()
+            },
+            profile_updated: 10,
+            ..Db::default()
+        };
+        let m = server.merge(&phone);
+        assert_eq!(m.weights.iter().map(|w| w.id).collect::<Vec<_>>(), [1, 3]);
+        assert_eq!(m.profile.name, "New");
+        // Sync round-trips the new fields.
+        let back: Db = serde_json::from_str(&serde_json::to_string(&m).unwrap()).unwrap();
+        assert_eq!(back, m);
     }
 
     #[test]

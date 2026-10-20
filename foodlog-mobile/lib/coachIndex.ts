@@ -4,6 +4,7 @@
 import { Db, Entry, LoggedSet, dateString, foodTitle, macrosFor } from './model';
 import { e1rm, fmtSet, records, sameExercise, upNext } from './workout';
 import type { Activity } from './coach';
+import { toPoints } from './weight';
 
 /** A tool in a provider-neutral shape (JSON Schema parameters). */
 export interface CoachTool {
@@ -24,8 +25,13 @@ const dateProp = (what: string) => ({ type: 'string', description: `${what} date
 export const COACH_TOOLS: CoachTool[] = [
   {
     name: 'get_overview',
-    description: "Today's date, daily goals, today's totals, Apple Health activity, the training program and the next workout. Call this first.",
+    description: "Today's date, the user's profile (age, height, sex, goal weight), latest weight, daily goals, today's totals, Apple Health activity, the training program and the next workout. Call this first.",
     parameters: obj({}),
+  },
+  {
+    name: 'get_weight_history',
+    description: 'Body weight log for the last N days (max 730): each weigh-in in lb, plus the trailing 7-day average.',
+    parameters: obj({ days: { type: 'integer', description: 'How many days back' } }, ['days']),
   },
   {
     name: 'get_meals',
@@ -118,12 +124,22 @@ export class CoachIndex {
   }
 
   t_get_overview() {
+    const p_ = this.db.profile;
+    const lastW = toPoints(this.db.weights, null).at(-1);
     const p = this.db.program;
     const next = p ? upNext(p, this.db.sets) : null;
     const nextDay = p && next ? p.weeks.find((w) => w.number === next.week)?.days[next.day] : undefined;
     return {
       today: dateString(0),
       weekday: new Date().toLocaleDateString('en-US', { weekday: 'long' }),
+      profile: {
+        name: p_.name || null,
+        age: p_.birth_year ? new Date().getFullYear() - p_.birth_year : null,
+        height_in: p_.height_in,
+        sex: p_.sex || null,
+        goal_weight_lb: p_.goal_weight_lb,
+      },
+      latest_weight: lastW ? { date: lastW.date, lb: lastW.lb, seven_day_avg_lb: r1(lastW.avg) } : null,
       goals: { kcal: this.db.goals.kcal, protein_g: this.db.goals.protein, carbs_g: this.db.goals.carbs, fat_g: this.db.goals.fat },
       today_totals: this.totals(dateString(0)),
       apple_health_today: this.activity ? { steps: r(this.activity.steps), active_kcal: r(this.activity.active) } : 'not available',
@@ -133,6 +149,12 @@ export class CoachIndex {
       up_next: nextDay ? { week: next!.week, day: nextDay.name, exercises: nextDay.exercises.map((x) => x.name) } : null,
       units: 'weights in lb, food in grams',
     };
+  }
+
+  t_get_weight_history(input: Record<string, unknown>) {
+    const n = Math.min(730, Math.max(1, Number(input.days) || 90));
+    const pts = toPoints(this.db.weights, dateString(-n));
+    return pts.length ? pts.map((x) => ({ date: x.date, lb: x.lb, seven_day_avg_lb: r1(x.avg) })) : { note: 'no weigh-ins logged in this period' };
   }
 
   t_get_meals(input: Record<string, unknown>) {
